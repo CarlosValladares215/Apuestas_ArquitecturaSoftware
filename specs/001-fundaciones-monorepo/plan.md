@@ -21,7 +21,7 @@ Inicializar el monorepo de la plataforma de apuestas deportivas con `pnpm` works
 
 ## Constitution Check
 
-*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
+_GATE: Must pass before Phase 0 research. Re-check after Phase 1 design._
 
 - [x] **I. Seguridad y antifraude**: `.gitignore` protege `.env*`; `.env.example` sin secretos; `apps/api` habilita `helmet` y `ValidationPipe` estricto (`whitelist: true`, `forbidNonWhitelisted: true`); `apps/reports` documenta conexión solo lectura; CORS controlado por variable de entorno.
 - [x] **II. Integridad financiera**: N/A para tablas de dinero en Spec 001 (pertenecen a Spec 003/004); `apps/web` no contiene lógica financiera ni de saldos.

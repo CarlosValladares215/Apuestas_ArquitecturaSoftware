@@ -5,7 +5,7 @@
 **Status**: Draft  
 **Input**: Spec #1 (`001-fundaciones-monorepo`) — Fase F0 de `PLAN.md`: inicializar el monorepo con `apps/web`, `apps/api`, `apps/reports` y `packages/shared`, herramientas de calidad (ESLint, Prettier, TypeScript estricto, Ruff, Commitlint/Husky), Docker Compose local (PostgreSQL + Redis), pipeline CI/CD en GitHub Actions con SonarQube, plantillas de issues/PR y manifiestos de despliegue.
 
-## User Scenarios & Testing *(mandatory)*
+## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - Entorno Monorepo Unificado y Verificable (Priority: P1)
 
@@ -61,7 +61,7 @@ Como equipo colaborativo, necesitamos archivos de entorno de ejemplo, `docker-co
 - ¿Qué ocurre si un desarrollador ejecuta comandos en Windows o Linux? Los scripts de raíz (`pnpm`) y Python deben ser portables entre plataformas sin depender exclusivamente de sintaxis Unix.
 - ¿Qué ocurre si `apps/api` o `apps/reports` reciben variables de entorno faltantes en pruebas de `/health`? Deben responder correctamente en modo base sin requerir conexión activa obligatoria a servicios externos para el endpoint de vida básica (`/health`).
 
-## Requirements *(mandatory)*
+## Requirements _(mandatory)_
 
 ### Functional Requirements
 
@@ -76,12 +76,12 @@ Como equipo colaborativo, necesitamos archivos de entorno de ejemplo, `docker-co
 - **FR-009**: Los vectores de fraude/seguridad aplicables a esta fase base (exposición accidental de secretos, cabeceras HTTP inseguras, validación de entrada desactivada, mezcla de lógica de reportes con escritura en BD) DEBEN quedar mitigados desde la configuración inicial (`.gitignore`, `.env.example`, `helmet`, `ValidationPipe` con `whitelist: true` y `forbidNonWhitelisted: true`, usuario de solo lectura documentado para `apps/reports`).
 - **FR-010**: La documentación `CLAUDE.md` y `specs/README.md` DEBEN actualizarse con los comandos reales del monorepo y el estado de la Spec `001-fundaciones-monorepo`.
 
-### Key Entities *(include if feature involves data)*
+### Key Entities _(include if feature involves data)_
 
 - **HealthStatus**: Contrato compartido de respuesta de salud (`status`, `service`, `version`, `timestamp`) definido en `packages/shared` y consumido por los endpoints `/health`.
 - **AppRole**: Enumeración base compartida de roles del sistema (`bettor`, `operator`, `admin`) alineada con la especificación funcional para uso consistente en futuras specs.
 
-## Success Criteria *(mandatory)*
+## Success Criteria _(mandatory)_
 
 ### Measurable Outcomes
 

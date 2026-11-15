@@ -9,12 +9,12 @@ paths:
       summary: Verifica el estado operativo del servicio
       operationId: getHealth
       responses:
-        "200":
+        '200':
           description: Servicio disponible
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/HealthStatus"
+                $ref: '#/components/schemas/HealthStatus'
 components:
   schemas:
     HealthStatus:
@@ -33,8 +33,8 @@ components:
           enum: [api, reports, web]
         version:
           type: string
-          example: "0.1.0"
+          example: '0.1.0'
         timestamp:
           type: string
           format: date-time
-          example: "2026-11-14T21:00:00.000Z"
+          example: '2026-11-14T21:00:00.000Z'
