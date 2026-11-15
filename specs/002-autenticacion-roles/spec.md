@@ -5,7 +5,7 @@
 **Status**: Draft  
 **Input**: Spec #2 (`002-autenticacion-roles`) — Fase F1 de `PLAN.md`: registro con verificación de correo y declaración de mayoría de edad, login con JWT en cookie `httpOnly` y refresh rotativo, hash de contraseñas con Argon2, 2FA TOTP, control de acceso basado en roles (RBAC) denegado por defecto, rate limiting / bloqueo por intentos fallidos / verificación CAPTCHA y módulo de auditoría append-only.
 
-## User Scenarios & Testing *(mandatory)*
+## User Scenarios & Testing _(mandatory)_
 
 ### User Story 1 - Registro con Mayoría de Edad y Verificación de Correo (Priority: P1)
 
@@ -80,17 +80,17 @@ Como usuario o administrador, necesito pantallas limpias, responsivas desde 360 
 
 ## Vectores de Fraude, Abuso y Mitigaciones (Constitución I)
 
-| Vector de fraude / abuso | Mitigación implementada |
-|---|---|
-| Ataque de fuerza bruta / relleno de credenciales | `@nestjs/throttler` por IP + bloqueo temporal de cuenta tras 5 fallos + verificación CAPTCHA + Argon2id |
-| Robo o reutilización de `refresh_token` | Cookies `httpOnly`/`SameSite=Lax`/`Secure`, almacenamiento solo de hash SHA-256 y revocación completa de `familyId` ante reuso |
-| Escalada de privilegios en registro o petición | `ValidationPipe` (`forbidNonWhitelisted`), rol fijado a `bettor` en servidor y `APP_GUARD` global denegado por defecto (`JwtAuthGuard` + `RolesGuard`) |
-| Robo de tokens desde XSS en navegador | Tokens emitidos en cookies `httpOnly`; prohibido guardar JWT en `localStorage` o `sessionStorage` |
-| Enumeración de cuentas registradas | Respuestas de error genéricas en login y normalización uniforme de tiempos/mensajes |
-| Manipulación o borrado del rastro forense | `AuditLog` append-only sin métodos/rutas de actualización ni eliminación |
-| Filtración de secretos TOTP si hay lectura de BD | Secreto TOTP cifrado con AES-256-GCM usando llave de entorno en backend (`TOTP_ENCRYPTION_KEY`) |
+| Vector de fraude / abuso                         | Mitigación implementada                                                                                                                                |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Ataque de fuerza bruta / relleno de credenciales | `@nestjs/throttler` por IP + bloqueo temporal de cuenta tras 5 fallos + verificación CAPTCHA + Argon2id                                                |
+| Robo o reutilización de `refresh_token`          | Cookies `httpOnly`/`SameSite=Lax`/`Secure`, almacenamiento solo de hash SHA-256 y revocación completa de `familyId` ante reuso                         |
+| Escalada de privilegios en registro o petición   | `ValidationPipe` (`forbidNonWhitelisted`), rol fijado a `bettor` en servidor y `APP_GUARD` global denegado por defecto (`JwtAuthGuard` + `RolesGuard`) |
+| Robo de tokens desde XSS en navegador            | Tokens emitidos en cookies `httpOnly`; prohibido guardar JWT en `localStorage` o `sessionStorage`                                                      |
+| Enumeración de cuentas registradas               | Respuestas de error genéricas en login y normalización uniforme de tiempos/mensajes                                                                    |
+| Manipulación o borrado del rastro forense        | `AuditLog` append-only sin métodos/rutas de actualización ni eliminación                                                                               |
+| Filtración de secretos TOTP si hay lectura de BD | Secreto TOTP cifrado con AES-256-GCM usando llave de entorno en backend (`TOTP_ENCRYPTION_KEY`)                                                        |
 
-## Requirements *(mandatory)*
+## Requirements _(mandatory)_
 
 ### Functional Requirements
 
@@ -106,14 +106,14 @@ Como usuario o administrador, necesito pantallas limpias, responsivas desde 360 
 - **FR-010**: `AuditModule` DEBE exponer `AuditService.record(...)` para persistir eventos inmutables (`who`, `action`, `when`, `ip`, `userAgent`, `deviceFingerprint`, `metadata`) desde esta spec y todas las futuras.
 - **FR-011**: `apps/web` DEBE proveer rutas `/registro`, `/login`, `/verificar-correo`, `/seguridad` y `/admin/usuarios` responsivas desde 360 px, WCAG 2.1 AA, usando `frontend-design` y `credentials: 'include'`.
 
-### Key Entities *(include if feature involves data)*
+### Key Entities _(include if feature involves data)_
 
 - **User**: Cuenta del usuario con credenciales Argon2id, rol RBAC (`bettor | operator | admin`), estado de verificación de correo, confirmación de mayoría de edad, estado/secreto cifrado de 2FA TOTP y contadores de bloqueo.
 - **EmailVerificationToken**: Token temporal de un solo uso almacenado como hash SHA-256.
 - **RefreshToken**: Sesión rotativa agrupada por `familyId`, almacenada como hash SHA-256 con trazabilidad de reemplazo y revocación.
 - **AuditLog**: Registro append-only de acciones sensibles y eventos de seguridad.
 
-## Success Criteria *(mandatory)*
+## Success Criteria _(mandatory)_
 
 ### Measurable Outcomes
 

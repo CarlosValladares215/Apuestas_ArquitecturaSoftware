@@ -12,13 +12,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/RegisterRequest"
+              $ref: '#/components/schemas/RegisterRequest'
       responses:
-        "201":
+        '201':
           description: Usuario registrado pendiente de verificación de correo
-        "400":
+        '400':
           description: Datos inválidos, menor de edad o CAPTCHA inválido
-        "409":
+        '409':
           description: Correo ya registrado
   /auth/verify-email:
     post:
@@ -34,9 +34,9 @@ paths:
                 token:
                   type: string
       responses:
-        "200":
+        '200':
           description: Correo verificado correctamente
-        "400":
+        '400':
           description: Token inválido, expirado o ya utilizado
   /auth/login:
     post:
@@ -46,43 +46,43 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/LoginRequest"
+              $ref: '#/components/schemas/LoginRequest'
       responses:
-        "200":
+        '200':
           description: Sesión iniciada con cookies httpOnly
-        "401":
+        '401':
           description: Credenciales o código TOTP inválidos
-        "403":
+        '403':
           description: Correo no verificado o cuenta bloqueada temporalmente
-        "429":
+        '429':
           description: Límite de intentos excedido
   /auth/refresh:
     post:
       summary: Rotar par de tokens mediante cookie refresh_token
       responses:
-        "200":
+        '200':
           description: Nuevo par de cookies httpOnly emitido
-        "401":
+        '401':
           description: Refresh token faltante, expirado o reutilizado (revoca familia)
   /auth/logout:
     post:
       summary: Cerrar sesión y revocar refresh token actual
       responses:
-        "200":
+        '200':
           description: Cookies limpiadas y sesión revocada
   /auth/me:
     get:
       summary: Obtener perfil del usuario autenticado
       responses:
-        "200":
+        '200':
           description: Perfil seguro del usuario
-        "401":
+        '401':
           description: No autenticado
   /auth/2fa/setup:
     post:
       summary: Generar secreto y URI TOTP (no activa hasta verificar)
       responses:
-        "200":
+        '200':
           description: Secreto temporal y URI otpauth://
   /auth/2fa/enable:
     post:
@@ -97,19 +97,19 @@ paths:
               properties:
                 code:
                   type: string
-                  pattern: "^[0-9]{6}$"
+                  pattern: '^[0-9]{6}$'
       responses:
-        "200":
+        '200':
           description: 2FA activado
-        "400":
+        '400':
           description: Código inválido o setup previo faltante
   /admin/users:
     get:
       summary: Listar usuarios (solo admin)
       responses:
-        "200":
+        '200':
           description: Lista paginada de usuarios sin hashes ni secretos
-        "403":
+        '403':
           description: Rol insuficiente
   /admin/users/{id}/role:
     patch:
@@ -132,19 +132,19 @@ paths:
                   type: string
                   enum: [bettor, operator, admin]
       responses:
-        "200":
+        '200':
           description: Rol actualizado y auditado
-        "400":
+        '400':
           description: Auto-cambio prohibido o rol inválido
-        "403":
+        '403':
           description: Rol insuficiente
   /admin/audit-logs:
     get:
       summary: Consultar registros de auditoría append-only (solo admin)
       responses:
-        "200":
+        '200':
           description: Eventos de auditoría ordenados del más reciente al más antiguo
-        "403":
+        '403':
           description: Rol insuficiente
 components:
   schemas:
