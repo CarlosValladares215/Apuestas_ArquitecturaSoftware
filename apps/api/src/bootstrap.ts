@@ -1,11 +1,13 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 
 /**
- * Applies baseline HTTP security headers, strict input validation, and CORS policy.
+ * Applies baseline HTTP security headers, cookie parsing, strict input validation, and CORS policy.
  */
 export function configureAppSecurity(app: INestApplication): void {
   app.use(helmet());
+  app.use(cookieParser());
 
   app.useGlobalPipes(
     new ValidationPipe({
