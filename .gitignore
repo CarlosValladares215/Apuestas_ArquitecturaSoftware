@@ -5,7 +5,15 @@ node_modules/
 !.env.example
 __pycache__/
 .venv/
+.pytest_cache/
+.ruff_cache/
 .next/
 dist/
 coverage/
 .turbo/
+*.tsbuildinfo
+*.egg-info/
+next-env.d.ts
+playwright-report/
+test-results/
+.specify/feature.json
