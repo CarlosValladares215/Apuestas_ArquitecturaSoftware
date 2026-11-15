@@ -1,0 +1,12 @@
+.agents/
+.claude/
+.specify/
+node_modules/
+dist/
+.next/
+coverage/
+.turbo/
+.venv/
+pnpm-lock.yaml
+PLAN.md
+promtp.md
