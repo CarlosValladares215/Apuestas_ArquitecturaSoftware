@@ -4,7 +4,31 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Estado del proyecto
 
-Proyecto académico (UTPL) en fase inicial: todavía no hay código. La especificación completa está en `promtp.md` y es la fuente de verdad de requisitos; léela antes de implementar cualquier funcionalidad. Los principios no negociables del proyecto están en `.specify/memory/constitution.md` (Spec Kit) y prevalecen sobre este archivo. El orden de construcción, las decisiones técnicas base y los criterios de cierre de cada fase están en `PLAN.md`. Cuando se creen los `package.json` / `pyproject.toml`, añade aquí los comandos reales de build, lint y tests (incluido cómo ejecutar un solo test).
+Fundaciones del monorepo completadas en `001-fundaciones-monorepo` (`apps/web`, `apps/api`, `apps/reports`, `packages/shared`, Docker Compose, CI/CD). La especificación completa de requisitos está en `promtp.md` y es la fuente de verdad funcional; léela antes de implementar cualquier funcionalidad. Los principios no negociables del proyecto están en `.specify/memory/constitution.md` (Spec Kit) y prevalecen sobre este archivo. El orden de construcción, las decisiones técnicas base y los criterios de cierre de cada fase están en `PLAN.md`.
+
+## Comandos del monorepo
+
+```bash
+# Instalar dependencias JS/TS
+pnpm install
+
+# Verificación completa (misma secuencia que CI)
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+
+# Ejecutar un solo test (JS/TS)
+pnpm --filter @apuestas/api test -- health.controller.spec.ts
+pnpm --filter @apuestas/web test -- page.test.tsx
+pnpm --filter @apuestas/shared test -- index.test.ts
+
+# Reportes en Python (apps/reports)
+cd apps/reports
+ruff check .
+pytest
+pytest tests/test_health.py
+```
 
 ## Arquitectura prevista
 
@@ -41,6 +65,7 @@ La seguridad antifraude es el criterio prioritario del proyecto. Al tocar dinero
 - Para trabajo de UI, usar el skill `frontend-design` instalado en `.claude/skills/`.
 
 <!-- SPECKIT START -->
+
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
 <!-- SPECKIT END -->
