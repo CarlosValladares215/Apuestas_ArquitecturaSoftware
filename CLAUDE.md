@@ -62,7 +62,15 @@ La seguridad antifraude es el criterio prioritario del proyecto. Al tocar dinero
 - Pipeline CI (GitHub Actions): lint + tipos → tests (Jest / pytest) → SonarQube con quality gate bloqueante → deploy (`develop` → staging, `main` → producción).
 - Grafana se usa para la trazabilidad del equipo de desarrollo (commits, PRs, despliegues, métricas DORA).
 - No usar Java ni Rust.
-- Para trabajo de UI, usar el skill `frontend-design` instalado en `.claude/skills/`.
+- Para trabajo de UI, usar el skill `frontend-design` instalado en `.agents/skills/` y `.claude/skills/`.
+
+## Skills instaladas y guía por integrante
+
+Todas las skills están disponibles tanto en `.agents/skills/` (Antigravity, Gemini CLI, GitHub Copilot) como en `.claude/skills/` (Claude Code):
+
+- **SDD (Spec Kit)**: `speckit-specify`, `speckit-clarify`, `speckit-plan`, `speckit-tasks`, `speckit-checklist`, `speckit-analyze`, `speckit-implement`, `speckit-constitution`, `speckit-taskstoissues` y `speckit-git-*`.
+- **Calidad, arquitectura y seguridad**: `frontend-design`, `nestjs-best-practices`, `supabase-postgres-best-practices`, `vercel-react-best-practices`, `test-driven-development`, `owasp-security` y `playwright-best-practices`.
+- **Asignación de ramas y onboarding del equipo**: consulta la sección "Asignación por Integrante y Flujo de Trabajo en Equipo" en `specs/README.md`.
 
 <!-- SPECKIT START -->
 
