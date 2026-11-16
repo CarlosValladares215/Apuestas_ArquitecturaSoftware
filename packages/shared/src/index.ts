@@ -37,3 +37,176 @@ export function createHealthStatus(
     timestamp: now.toISOString(),
   };
 }
+
+/* ========================================================================== */
+/* LEDGER & WALLET CONTRACTS (Phase F2: Specs 003 & 004)                     */
+/* ========================================================================== */
+
+export const ACCOUNT_TYPES = ['user_real', 'user_bonus', 'house', 'gateway'] as const;
+export type AccountType = (typeof ACCOUNT_TYPES)[number];
+
+export const LEDGER_ENTRY_TYPES = ['DEBIT', 'CREDIT'] as const;
+export type LedgerEntryType = (typeof LEDGER_ENTRY_TYPES)[number];
+
+export const TRANSACTION_TYPES = [
+  'DEPOSIT',
+  'WITHDRAWAL',
+  'BET_STAKE',
+  'BET_PAYOUT',
+  'BONUS_GRANT',
+  'COMPENSATION',
+] as const;
+export type TransactionType = (typeof TRANSACTION_TYPES)[number];
+
+export const PAYMENT_INTENT_STATUSES = ['PENDING', 'COMPLETED', 'REJECTED', 'EXPIRED'] as const;
+export type PaymentIntentStatus = (typeof PAYMENT_INTENT_STATUSES)[number];
+
+export interface LedgerAccount {
+  id: string;
+  code: string;
+  type: AccountType;
+  userId?: string | null;
+  currency: 'USD';
+  createdAt: string;
+}
+
+export interface LedgerTransaction {
+  id: string;
+  referenceCode: string;
+  type: TransactionType;
+  description: string;
+  idempotencyKey: string;
+  createdAt: string;
+}
+
+export interface LedgerEntry {
+  id: string;
+  transactionId: string;
+  accountId: string;
+  entryType: LedgerEntryType;
+  amount: number; // Stored in cents (integer) to avoid float precision bugs
+  createdAt: string;
+}
+
+export interface WalletBalance {
+  userId: string;
+  realBalance: number; // In dollars (decimal format for client presentation)
+  bonusBalance: number; // In dollars
+  totalBalance: number; // In dollars
+  currency: 'USD';
+  updatedAt: string;
+}
+
+export interface WalletMovementDto {
+  id: string;
+  transactionId: string;
+  referenceCode: string;
+  type: TransactionType;
+  accountType: AccountType;
+  entryType: LedgerEntryType;
+  amount: number; // In dollars
+  description: string;
+  createdAt: string;
+}
+
+export interface CreateDepositIntentDto {
+  userId: string;
+  amount: number; // In dollars (e.g. 25.00)
+  currency: 'USD';
+}
+
+export interface DepositIntentResponseDto {
+  intentId: string;
+  clientTransactionId: string;
+  amount: number; // In dollars
+  currency: 'USD';
+  status: PaymentIntentStatus;
+  payphoneUrl: string;
+}
+
+export interface ConfirmDepositDto {
+  clientTransactionId: string;
+  payphoneTransactionId: string;
+}
+
+export interface ConfirmDepositResponseDto {
+  success: boolean;
+  status: PaymentIntentStatus;
+  clientTransactionId: string;
+  creditedAmount: number; // In dollars
+  currency: 'USD';
+  newRealBalance: number; // In dollars
+}
+
+export interface DebitWalletDto {
+  userId: string;
+  amount: number; // In dollars
+  referenceCode: string;
+  description: string;
+  accountType?: 'user_real' | 'user_bonus';
+}
+
+export interface DebitWalletResponseDto {
+  success: boolean;
+  transactionId: string;
+  debitedAmount: number; // In dollars
+  remainingBalance: number; // In dollars
+}
+
+/* ========================================================================== */
+/* PURE FINANCIAL HELPERS                                                     */
+/* ========================================================================== */
+
+/**
+ * Converts a dollar amount (e.g. 10.55) to integer cents (1055), preventing floating-point drift.
+ */
+export function dollarsToCents(dollars: number): number {
+  return Math.round(dollars * 100);
+}
+
+/**
+ * Converts integer cents (e.g. 1055) to dollars (10.55).
+ */
+export function centsToDollars(cents: number): number {
+  return cents / 100;
+}
+
+/**
+ * Validates the fundamental double-entry rule:
+ * Sum(Debits) === Sum(Credits) and all amounts > 0.
+ */
+export function validateBalancedTransaction(
+  entries: ReadonlyArray<{ entryType: LedgerEntryType; amount: number }>,
+): boolean {
+  if (entries.length < 2) {
+    return false;
+  }
+
+  let totalDebits = 0;
+  let totalCredits = 0;
+
+  for (const entry of entries) {
+    if (!Number.isInteger(entry.amount) || entry.amount <= 0) {
+      return false;
+    }
+    if (entry.entryType === 'DEBIT') {
+      totalDebits += entry.amount;
+    } else {
+      totalCredits += entry.amount;
+    }
+  }
+
+  return totalDebits === totalCredits;
+}
+
+/**
+ * Calculates user account balance from entries in cents:
+ * Credits add to balance; Debits reduce balance.
+ */
+export function deriveBalanceFromEntries(
+  entries: ReadonlyArray<{ entryType: LedgerEntryType; amount: number }>,
+): number {
+  return entries.reduce((acc, entry) => {
+    return entry.entryType === 'CREDIT' ? acc + entry.amount : acc - entry.amount;
+  }, 0);
+}
