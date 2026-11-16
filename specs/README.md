@@ -11,8 +11,8 @@ Fuente: fases de [`PLAN.md`](../PLAN.md). Reglas: [constitución](../.specify/me
 | 002 | `002-autenticacion-roles`         | F1   | Registro, login, 2FA, roles (RBAC), bloqueo por intentos fallidos y auditoría     | Pendiente |
 | 003 | `003-billetera-ledger`            | F2   | Ledger de doble entrada, saldo real y de bono, bloqueo de concurrencia            | Pendiente |
 | 004 | `004-depositos-payphone`          | F2   | Depósitos con Payphone sandbox y confirmación servidor a servidor                 | Pendiente |
-| 005 | `005-partidos-mercados`           | F3   | Partidos, máquina de estados, mercados y cuotas, gestión del operador             | Pendiente |
-| 006 | `006-sincronizacion-api-football` | F3   | Worker de API-Football con presupuesto diario y frecuencia adaptativa             | Pendiente |
+| 005 | `005-partidos-mercados`           | F3   | Partidos, máquina de estados, mercados y cuotas, gestión del operador             | Terminada |
+| 006 | `006-sincronizacion-api-football` | F3   | Worker de API-Football con presupuesto diario y frecuencia adaptativa             | Terminada |
 | 007 | `007-apuestas-simples-combinadas` | F4   | Boleto de apuesta, aceptación atómica, cuota congelada, límites                   | Pendiente |
 | 008 | `008-liquidacion-tiempo-real`     | F5   | Liquidación idempotente, WebSocket, objetivo ≤ 5 s, re-liquidación auditada       | Pendiente |
 | 009 | `009-suspensiones-aplazamientos`  | F5   | Plazo de reanudación, anulación y reembolso, cuota 1.00 en combinadas             | Pendiente |
