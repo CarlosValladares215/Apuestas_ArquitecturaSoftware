@@ -10,7 +10,7 @@ import {
   MatchWithMarkets,
   SyncQuotaPurpose,
 } from '@apuestas/shared';
-import { SiteHeader } from '../../components/SiteHeader';
+import { AppShell } from '../../components/AppShell';
 import {
   ApiClientError,
   createMatch,
@@ -225,9 +225,7 @@ export default function OperatorPage() {
   }
 
   return (
-    <div className="page-shell">
-      <SiteHeader currentPath="/operador" />
-
+    <AppShell currentPath="/operador">
       <main className="admin-layout">
         <section className="panel-card" aria-labelledby="operator-heading">
           <h1 id="operator-heading" className="hero-title">
@@ -507,6 +505,6 @@ export default function OperatorPage() {
           </section>
         ) : null}
       </main>
-    </div>
+    </AppShell>
   );
 }
