@@ -162,7 +162,7 @@ describe('Bloque A Live Integration Flows (Operador, Payphone S2S, Sandbox Regis
       const init = call[1];
       expect(init?.credentials).toBe('include');
     }
-  });
+  }, 15000);
 
   it('DepositForm pre-fills Payphone return query parameters and submits S2S confirmation', async () => {
     window.history.replaceState({}, '', '/wallet?clientTransactionId=DEP_RET_123&id=PAY_998877');

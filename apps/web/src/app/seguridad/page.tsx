@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { SyntheticEvent, useCallback, useEffect, useState } from 'react';
 import type { AuthUserView, TotpSetupResponse } from '@apuestas/shared';
-import { SiteHeader } from '../../components/SiteHeader';
+import { AppShell } from '../../components/AppShell';
+import { useSession } from '../../context/session-context';
 import {
   ApiClientError,
   enableTotp,
@@ -14,6 +15,7 @@ import {
 } from '../../lib/api-client';
 
 export default function SecurityPage() {
+  const { setSessionUser } = useSession();
   const [user, setUser] = useState<AuthUserView | null>(null);
   const [loading, setLoading] = useState(true);
   const [enrollment, setEnrollment] = useState<TotpSetupResponse | null>(null);
@@ -66,6 +68,7 @@ export default function SecurityPage() {
     try {
       const response = await enableTotp(totpCode.trim());
       setUser(response.user);
+      setSessionUser(response.user);
       setEnrollment(null);
       setTotpCode('');
       setStatusMessage('2FA TOTP activado correctamente.');
@@ -84,6 +87,7 @@ export default function SecurityPage() {
     try {
       const renewed = await refreshSession();
       setUser(renewed.user);
+      setSessionUser(renewed.user);
       setStatusMessage('Par de cookies httpOnly rotado correctamente en el servidor.');
     } catch (error) {
       setErrorMessage(
@@ -97,6 +101,7 @@ export default function SecurityPage() {
     try {
       await logoutAccount();
       setUser(null);
+      setSessionUser(null);
       setEnrollment(null);
       setStatusMessage('Sesión cerrada y refresh token revocado.');
     } catch {
@@ -105,9 +110,7 @@ export default function SecurityPage() {
   }
 
   return (
-    <div className="page-shell">
-      <SiteHeader currentPath="/seguridad" />
-
+    <AppShell currentPath="/seguridad">
       <main className="auth-layout">
         <section className="panel-card" aria-labelledby="security-heading">
           <h1 id="security-heading" className="hero-title">
@@ -237,6 +240,6 @@ export default function SecurityPage() {
           </p>
         </aside>
       </main>
-    </div>
+    </AppShell>
   );
 }

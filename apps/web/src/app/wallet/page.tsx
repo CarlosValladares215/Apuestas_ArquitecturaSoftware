@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import React, { useCallback, useEffect, useState } from 'react';
 import { WalletBalance, WalletMovementDto } from '@apuestas/shared';
-import { SiteHeader } from '../../components/SiteHeader';
+import { AppShell } from '../../components/AppShell';
 import { API_BASE_URL } from '../../lib/api-client';
 import { BalanceCard } from './components/balance-card';
 import { DepositForm } from './components/deposit-form';
@@ -79,9 +79,7 @@ export default function WalletPage() {
   };
 
   return (
-    <div className="page-shell">
-      <SiteHeader currentPath="/wallet" />
-
+    <AppShell currentPath="/wallet">
       <main className="main-container wallet-layout" id="main-content">
         <header className="wallet-header">
           <h1 className="hero-title">Billetera y Ledger Contable</h1>
@@ -123,6 +121,6 @@ export default function WalletPage() {
           </div>
         </div>
       </main>
-    </div>
+    </AppShell>
   );
 }

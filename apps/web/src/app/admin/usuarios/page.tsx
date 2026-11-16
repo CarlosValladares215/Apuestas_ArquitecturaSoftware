@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { APP_ROLES, AppRole, AuditLogEntryView, AuthUserView } from '@apuestas/shared';
-import { SiteHeader } from '../../../components/SiteHeader';
+import { AppShell } from '../../../components/AppShell';
 import {
   ApiClientError,
   fetchAdminAuditLogs,
@@ -62,9 +62,7 @@ export default function AdminUsersPage() {
   }
 
   return (
-    <div className="page-shell">
-      <SiteHeader currentPath="/admin/usuarios" />
-
+    <AppShell currentPath="/admin/usuarios">
       <main className="admin-layout">
         <section className="panel-card" aria-labelledby="admin-heading">
           <h1 id="admin-heading" className="hero-title">
@@ -176,6 +174,6 @@ export default function AdminUsersPage() {
           </section>
         ) : null}
       </main>
-    </div>
+    </AppShell>
   );
 }

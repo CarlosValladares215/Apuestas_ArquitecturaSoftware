@@ -3,8 +3,8 @@
 import Link from 'next/link';
 import { SyntheticEvent, useState } from 'react';
 import { validatePasswordStrength } from '@apuestas/shared';
+import { AppShell } from '../../components/AppShell';
 import { CaptchaChallenge } from '../../components/CaptchaChallenge';
-import { SiteHeader } from '../../components/SiteHeader';
 import { ApiClientError, registerAccount } from '../../lib/api-client';
 
 export default function RegisterPage() {
@@ -75,18 +75,24 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="page-shell">
-      <SiteHeader currentPath="/registro" />
-
+    <AppShell currentPath="/registro">
       <main className="auth-layout">
         <section className="panel-card" aria-labelledby="register-heading">
           <h1 id="register-heading" className="hero-title">
             Crear cuenta en la plataforma
           </h1>
           <p className="hero-copy">
-            Toda cuenta nueva se crea exclusivamente con el rol básico de apostador y requiere
-            verificación de correo antes de acceder.
+            Completa el formulario para registrarte. Toda cuenta nueva inicia como apostador y
+            requiere verificar su correo antes de ingresar.
           </p>
+
+          <div className="role-clarity-banner" role="note" aria-label="Rol asignado al registrarse">
+            <span className="role-badge role-badge-bettor">Cuenta nueva: Apostador (bettor)</span>
+            <span>
+              Los roles <strong>Operador</strong> y <strong>Administrador</strong> solo los asigna
+              internamente un Administrador.
+            </span>
+          </div>
 
           <form
             className="stack-form"
@@ -217,6 +223,6 @@ export default function RegisterPage() {
           </ul>
         </aside>
       </main>
-    </div>
+    </AppShell>
   );
 }

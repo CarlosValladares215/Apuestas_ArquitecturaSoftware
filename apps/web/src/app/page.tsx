@@ -1,7 +1,7 @@
 import Link from 'next/link';
-import { APP_ROLES, ApiFootballSyncStatus, MatchWithMarkets } from '@apuestas/shared';
+import { ApiFootballSyncStatus, MatchWithMarkets } from '@apuestas/shared';
+import { AppShell } from '../components/AppShell';
 import { Matchboard } from '../components/matchboard';
-import { SiteHeader } from '../components/SiteHeader';
 
 const INITIAL_MATCHES: readonly MatchWithMarkets[] = [
   {
@@ -232,18 +232,15 @@ const INITIAL_SYNC_STATUS: ApiFootballSyncStatus = {
 
 export default function HomePage() {
   return (
-    <div className="page-shell">
-      <SiteHeader currentPath="/" />
-
+    <AppShell currentPath="/">
       <main className="main-container">
         <section aria-labelledby="hero-title" className="hero-section">
           <h1 id="hero-title" className="hero-title">
             Cartelera deportiva y mercados en tiempo real
           </h1>
           <p className="hero-copy">
-            Esta interfaz opera en modo de solo presentación: el cierre pre-partido se evalúa con el
-            reloj del servidor y la sincronización con API-Football corre exclusivamente en el
-            backend sin exponer credenciales en el navegador. Roles activos: {APP_ROLES.join(', ')}.
+            Consulta partidos en vivo y programados con cierre automático pre-partido en el reloj
+            del servidor y mercados actualizados desde nuestro motor central.
           </p>
 
           <div className="cta-strip">
@@ -269,11 +266,12 @@ export default function HomePage() {
             Arquitectura de tres servicios
           </h2>
           <p className="board-subtitle">
-            Aplicación Web (Next.js en Vercel), API Principal (NestJS con ledger inmutable y RBAC en
-            Render) y Servicio de Reportes (FastAPI en Render).
+            Interfaz en modo de solo presentación (Next.js en Vercel), API principal con RBAC,
+            ledger de doble entrada y sincronización API-Football (NestJS en Render) y servicio de
+            reportes (FastAPI en Render).
           </p>
         </aside>
       </main>
-    </div>
+    </AppShell>
   );
 }
