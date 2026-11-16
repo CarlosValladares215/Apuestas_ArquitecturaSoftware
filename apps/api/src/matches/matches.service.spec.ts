@@ -28,8 +28,8 @@ describe('MatchesService (005-partidos-mercados)', () => {
   });
 
   describe('match state machine transitions', () => {
-    it('supports valid lifecycle transitions programado -> en_vivo -> finalizado and records audit logs', () => {
-      const created = service.createMatch(
+    it('supports valid lifecycle transitions programado -> en_vivo -> finalizado and records audit logs', async () => {
+      const created = await service.createMatch(
         {
           competitionId: 'comp_conmebol',
           competitionName: 'Eliminatorias CONMEBOL',
@@ -43,7 +43,7 @@ describe('MatchesService (005-partidos-mercados)', () => {
 
       expect(created.status).toBe('programado');
 
-      const live = service.transitionMatchStatus(
+      const live = await service.transitionMatchStatus(
         created.id,
         { status: 'en_vivo', homeScore: 1, awayScore: 0, elapsedMinute: 24 },
         'operator',
@@ -52,7 +52,7 @@ describe('MatchesService (005-partidos-mercados)', () => {
       expect(live.score).toEqual({ home: 1, away: 0 });
       expect(live.elapsedMinute).toBe(24);
 
-      const finished = service.transitionMatchStatus(
+      const finished = await service.transitionMatchStatus(
         created.id,
         { status: 'finalizado', homeScore: 2, awayScore: 0 },
         'operator',
@@ -68,8 +68,8 @@ describe('MatchesService (005-partidos-mercados)', () => {
       );
     });
 
-    it('supports suspension and postponement transitions and rejects invalid transitions', () => {
-      const created = service.createMatch(
+    it('supports suspension and postponement transitions and rejects invalid transitions', async () => {
+      const created = await service.createMatch(
         {
           competitionId: 'comp_ligapro',
           competitionName: 'LigaPro Serie A',
@@ -81,38 +81,35 @@ describe('MatchesService (005-partidos-mercados)', () => {
         'operator',
       );
 
-      // Invalid direct jump programado -> finalizado
-      expect(() =>
+      await expect(
         service.transitionMatchStatus(created.id, { status: 'finalizado' }, 'operator'),
-      ).toThrow(BadRequestException);
+      ).rejects.toThrow(BadRequestException);
 
-      // Valid programado -> suspendido -> en_vivo -> finalizado
-      const suspended = service.transitionMatchStatus(
+      const suspended = await service.transitionMatchStatus(
         created.id,
         { status: 'suspendido' },
         'operator',
       );
       expect(suspended.status).toBe('suspendido');
 
-      const resumed = service.transitionMatchStatus(
+      const resumed = await service.transitionMatchStatus(
         created.id,
         { status: 'en_vivo', homeScore: 0, awayScore: 0, elapsedMinute: 46 },
         'operator',
       );
       expect(resumed.status).toBe('en_vivo');
 
-      service.transitionMatchStatus(created.id, { status: 'finalizado' }, 'operator');
+      await service.transitionMatchStatus(created.id, { status: 'finalizado' }, 'operator');
 
-      // Terminal state finalizado cannot transition back to en_vivo or programado
-      expect(() =>
+      await expect(
         service.transitionMatchStatus(created.id, { status: 'en_vivo' }, 'operator'),
-      ).toThrow(BadRequestException);
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
   describe('automatic closure of pre-match markets by server clock', () => {
-    it('closes pre-match markets automatically as soon as server clock reaches kickoffAt', () => {
-      const match = service.createMatch(
+    it('closes pre-match markets automatically as soon as server clock reaches kickoffAt', async () => {
+      const match = await service.createMatch(
         {
           competitionId: 'comp_ucl',
           competitionName: 'UEFA Champions League',
@@ -124,7 +121,7 @@ describe('MatchesService (005-partidos-mercados)', () => {
         'operator',
       );
 
-      const market = service.createMarket(
+      const market = await service.createMarket(
         match.id,
         {
           type: 'match_winner_1x2',
@@ -141,27 +138,25 @@ describe('MatchesService (005-partidos-mercados)', () => {
 
       expect(market.status).toBe('open');
 
-      // Advance server clock to exact kickoff time
       currentServerTime = new Date('2026-11-15T19:00:00.000Z');
 
-      const fetchedAfterKickoff = service.getMatchById(match.id);
+      const fetchedAfterKickoff = await service.getMatchById(match.id);
       const refreshedMarket = fetchedAfterKickoff.markets.find((m) => m.id === market.id);
       expect(refreshedMarket?.status).toBe('closed');
       expect(refreshedMarket?.closedReason).toBe('match_started');
 
-      // Reject manual odds changes on pre-match market once server kickoff time has passed
-      expect(() =>
+      await expect(
         service.updateMarketOdds(
           match.id,
           market.id,
           { selections: [{ key: 'HOME', odds: 2.1 }] },
           'operator',
         ),
-      ).toThrow(BadRequestException);
+      ).rejects.toThrow(BadRequestException);
     });
 
-    it('allows operator to update manual odds before kickoff and rejects invalid odds < 1.01', () => {
-      const match = service.createMatch(
+    it('allows operator to update manual odds before kickoff and rejects invalid odds < 1.01', async () => {
+      const match = await service.createMatch(
         {
           competitionId: 'comp_ligapro',
           competitionName: 'LigaPro Serie A',
@@ -179,7 +174,7 @@ describe('MatchesService (005-partidos-mercados)', () => {
         throw new Error('Expected default 1X2 market');
       }
 
-      const updated = service.updateMarketOdds(
+      const updated = await service.updateMarketOdds(
         match.id,
         market.id,
         { selections: [{ key: 'HOME', odds: 1.75 }] },
@@ -189,14 +184,14 @@ describe('MatchesService (005-partidos-mercados)', () => {
       const homeSelection = updated.selections.find((s) => s.key === 'HOME');
       expect(homeSelection?.odds).toBe(1.75);
 
-      expect(() =>
+      await expect(
         service.updateMarketOdds(
           match.id,
           market.id,
           { selections: [{ key: 'HOME', odds: 0.95 }] },
           'admin',
         ),
-      ).toThrow(BadRequestException);
+      ).rejects.toThrow(BadRequestException);
     });
   });
 });

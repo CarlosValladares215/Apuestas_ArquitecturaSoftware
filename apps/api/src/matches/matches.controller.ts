@@ -41,7 +41,7 @@ export class MatchesController {
   listMatches(
     @Query('status') status?: string,
     @Query('competitionId') competitionId?: string,
-  ): MatchWithMarkets[] {
+  ): Promise<MatchWithMarkets[]> {
     let validatedStatus: MatchStatus | undefined;
     if (status !== undefined) {
       if (!isValidMatchStatus(status)) {
@@ -58,20 +58,23 @@ export class MatchesController {
 
   @Public()
   @Get('sync/status')
-  getSyncStatus(): ApiFootballSyncStatus {
+  getSyncStatus(): Promise<ApiFootballSyncStatus> {
     return this.syncService.getStatus();
   }
 
   @Post('sync/run')
   @HttpCode(200)
   @Roles('operator', 'admin')
-  runSync(@Body() dto: RunSyncDto, @CurrentUser() user: AuthenticatedUser): ApiFootballSyncStatus {
+  runSync(
+    @Body() dto: RunSyncDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<ApiFootballSyncStatus> {
     return this.syncService.runSyncCycle(dto.purpose ?? 'live', user.role, user.userId);
   }
 
   @Public()
   @Get(':id')
-  getMatchById(@Param('id') id: string): MatchWithMarkets {
+  getMatchById(@Param('id') id: string): Promise<MatchWithMarkets> {
     return this.matchesService.getMatchById(id);
   }
 
@@ -80,7 +83,7 @@ export class MatchesController {
   createMatch(
     @Body() dto: CreateMatchDto,
     @CurrentUser() user: AuthenticatedUser,
-  ): MatchWithMarkets {
+  ): Promise<MatchWithMarkets> {
     return this.matchesService.createMatch(dto, user.role, user.userId);
   }
 
@@ -90,7 +93,7 @@ export class MatchesController {
     @Param('id') id: string,
     @Body() dto: UpdateMatchStatusDto,
     @CurrentUser() user: AuthenticatedUser,
-  ): MatchWithMarkets {
+  ): Promise<MatchWithMarkets> {
     return this.matchesService.transitionMatchStatus(id, dto, user.role, user.userId);
   }
 
@@ -100,7 +103,7 @@ export class MatchesController {
     @Param('id') id: string,
     @Body() dto: CreateMarketDto,
     @CurrentUser() user: AuthenticatedUser,
-  ): BettingMarket {
+  ): Promise<BettingMarket> {
     return this.matchesService.createMarket(id, dto, user.role, user.userId);
   }
 
@@ -111,7 +114,7 @@ export class MatchesController {
     @Param('marketId') marketId: string,
     @Body() dto: UpdateMarketOddsDto,
     @CurrentUser() user: AuthenticatedUser,
-  ): BettingMarket {
+  ): Promise<BettingMarket> {
     return this.matchesService.updateMarketOdds(id, marketId, dto, user.role, user.userId);
   }
 }

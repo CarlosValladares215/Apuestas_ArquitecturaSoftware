@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
-import { DepositIntentResponseDto } from '@apuestas/shared';
-import { API_BASE_URL } from '../../../lib/api-client';
+import React, { useEffect, useState } from 'react';
+import { ConfirmDepositResponseDto, DepositIntentResponseDto } from '@apuestas/shared';
+import { API_BASE_URL, ApiClientError, confirmDeposit } from '../../../lib/api-client';
 
 interface DepositFormProps {
   onIntentCreated?: (intent: DepositIntentResponseDto) => void;
@@ -15,9 +15,29 @@ export function DepositForm({ onIntentCreated, onRefreshBalance }: DepositFormPr
   const [error, setError] = useState<string | null>(null);
   const [intent, setIntent] = useState<DepositIntentResponseDto | null>(null);
 
+  const [confirmClientTxId, setConfirmClientTxId] = useState<string>('');
+  const [payphoneTxId, setPayphoneTxId] = useState<string>('');
+  const [confirming, setConfirming] = useState<boolean>(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
+  const [confirmResult, setConfirmResult] = useState<ConfirmDepositResponseDto | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const returnedClientTx = params.get('clientTransactionId') ?? params.get('clientTxId');
+    const returnedPayphoneId = params.get('id');
+    if (returnedClientTx) {
+      setConfirmClientTxId(returnedClientTx);
+    }
+    if (returnedPayphoneId) {
+      setPayphoneTxId(returnedPayphoneId);
+    }
+  }, []);
+
   const handleSubmit = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     setError(null);
+    setConfirmError(null);
+    setConfirmResult(null);
 
     const numericAmount = parseFloat(amount);
     if (isNaN(numericAmount) || numericAmount <= 0) {
@@ -46,6 +66,7 @@ export function DepositForm({ onIntentCreated, onRefreshBalance }: DepositFormPr
 
       const data = (await response.json()) as DepositIntentResponseDto;
       setIntent(data);
+      setConfirmClientTxId(data.clientTransactionId);
       if (onIntentCreated) {
         onIntentCreated(data);
       }
@@ -53,6 +74,34 @@ export function DepositForm({ onIntentCreated, onRefreshBalance }: DepositFormPr
       setError((err as Error).message || 'Error inesperado al conectar con el servidor');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleConfirmDeposit = async (e: React.SyntheticEvent) => {
+    e.preventDefault();
+    setConfirmError(null);
+    setConfirmResult(null);
+
+    const txRef = confirmClientTxId.trim();
+    const gatewayTxId = payphoneTxId.trim();
+    if (!txRef || !gatewayTxId) {
+      setConfirmError('Ingresa la referencia de intención y el ID de transacción Payphone.');
+      return;
+    }
+
+    setConfirming(true);
+    try {
+      const confirmed = await confirmDeposit(txRef, gatewayTxId);
+      setConfirmResult(confirmed);
+      onRefreshBalance();
+    } catch (err) {
+      setConfirmError(
+        err instanceof ApiClientError
+          ? err.message
+          : 'No fue posible confirmar el depósito con el servidor.',
+      );
+    } finally {
+      setConfirming(false);
     }
   };
 
@@ -148,6 +197,68 @@ export function DepositForm({ onIntentCreated, onRefreshBalance }: DepositFormPr
           </div>
         </div>
       )}
+
+      {intent || confirmClientTxId ? (
+        <form
+          onSubmit={(e) => {
+            void handleConfirmDeposit(e);
+          }}
+          className="deposit-form"
+          aria-label="Confirmación servidor a servidor con Payphone"
+          noValidate
+        >
+          <div className="form-group">
+            <label htmlFor="confirm-client-tx-input" className="form-label">
+              Referencia de intención (clientTransactionId):
+            </label>
+            <input
+              id="confirm-client-tx-input"
+              type="text"
+              className="field-input"
+              value={confirmClientTxId}
+              onChange={(e) => {
+                setConfirmClientTxId(e.target.value);
+              }}
+              disabled={confirming}
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="payphone-tx-input" className="form-label">
+              ID de transacción Payphone:
+            </label>
+            <input
+              id="payphone-tx-input"
+              type="text"
+              className="field-input"
+              value={payphoneTxId}
+              onChange={(e) => {
+                setPayphoneTxId(e.target.value);
+              }}
+              disabled={confirming}
+              placeholder="Ej. 8812345"
+            />
+          </div>
+
+          {confirmError ? (
+            <div role="alert" className="form-error-alert">
+              {confirmError}
+            </div>
+          ) : null}
+
+          {confirmResult ? (
+            <div role="status" className="alert-success">
+              Depósito acreditado: ${confirmResult.creditedAmount.toFixed(2)}{' '}
+              {confirmResult.currency}. Nuevo saldo real: ${confirmResult.newRealBalance.toFixed(2)}{' '}
+              {confirmResult.currency}.
+            </div>
+          ) : null}
+
+          <button type="submit" className="btn-secondary" disabled={confirming}>
+            {confirming ? 'Verificando con Payphone...' : 'Confirmar acreditación S2S'}
+          </button>
+        </form>
+      ) : null}
     </section>
   );
 }

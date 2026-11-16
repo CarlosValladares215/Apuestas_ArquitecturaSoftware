@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   AppRole,
   BettingMarket,
@@ -23,54 +24,57 @@ import {
   UpdateMarketOddsDto,
   UpdateMatchStatusDto,
 } from './dto/matches.dto';
-import { createInitialMatchesSeed } from './matches.seed';
+import { InMemoryMatchesRepository } from './repositories/in-memory-matches.repository';
+import {
+  ExternalFixtureUpsertInput,
+  MATCHES_REPOSITORY,
+  MatchesRepository,
+} from './repositories/matches.repository';
 
 @Injectable()
 export class MatchesService {
-  private readonly matches: MatchWithMarkets[] = createInitialMatchesSeed();
   private readonly auditLog: MatchAuditEntry[] = [];
-  private sequence = 100;
+  private readonly matchesRepository: MatchesRepository;
 
   constructor(
     @Inject(CLOCK_PORT) private readonly clock: ServerClock,
+    @Optional()
+    @Inject(MATCHES_REPOSITORY)
+    matchesRepository?: MatchesRepository,
     @Optional() private readonly globalAuditService?: AuditService,
-  ) {}
-
-  listMatches(filters?: { status?: MatchStatus; competitionId?: string }): MatchWithMarkets[] {
-    const evaluated = this.matches.map((match) => this.evaluateMatchMarketsWithClock(match));
-
-    return evaluated.filter((match) => {
-      if (filters?.status && match.status !== filters.status) {
-        return false;
-      }
-      if (filters?.competitionId && match.competitionId !== filters.competitionId) {
-        return false;
-      }
-      return true;
-    });
+  ) {
+    this.matchesRepository = matchesRepository ?? new InMemoryMatchesRepository();
   }
 
-  getMatchById(matchId: string): MatchWithMarkets {
-    const match = this.matches.find((item) => item.id === matchId);
+  async listMatches(filters?: {
+    status?: MatchStatus;
+    competitionId?: string;
+  }): Promise<MatchWithMarkets[]> {
+    const matches = await this.matchesRepository.findAll(filters);
+    return Promise.all(matches.map((match) => this.evaluateAndPersistAutoClose(match)));
+  }
+
+  async getMatchById(matchId: string): Promise<MatchWithMarkets> {
+    const match = await this.matchesRepository.findById(matchId);
     if (!match) {
       throw new NotFoundException(`Partido ${matchId} no encontrado.`);
     }
 
-    return this.evaluateMatchMarketsWithClock(match);
+    return this.evaluateAndPersistAutoClose(match);
   }
 
-  createMatch(
+  async createMatch(
     dto: CreateMatchDto,
     actorRole: AppRole,
     actorUserId: string | null = null,
-  ): MatchWithMarkets {
+  ): Promise<MatchWithMarkets> {
     if (dto.homeTeam.trim().toLowerCase() === dto.awayTeam.trim().toLowerCase()) {
       throw new BadRequestException('El equipo local y visitante deben ser distintos.');
     }
 
     const nowIso = this.clock.now().toISOString();
-    const matchId = `match_${String(++this.sequence)}`;
-    const marketId = `mkt_${String(++this.sequence)}_1x2`;
+    const matchId = `match_${randomUUID().slice(0, 12)}`;
+    const marketId = `mkt_${randomUUID().slice(0, 12)}`;
 
     const match: MatchWithMarkets = {
       id: matchId,
@@ -99,21 +103,21 @@ export class MatchesService {
           closedReason: null,
           selections: [
             {
-              id: `sel_${String(++this.sequence)}_home`,
+              id: `sel_${randomUUID().slice(0, 12)}`,
               marketId,
               key: 'HOME',
               label: dto.homeTeam.trim(),
               odds: 2.0,
             },
             {
-              id: `sel_${String(++this.sequence)}_draw`,
+              id: `sel_${randomUUID().slice(0, 12)}`,
               marketId,
               key: 'DRAW',
               label: 'Empate',
               odds: 3.2,
             },
             {
-              id: `sel_${String(++this.sequence)}_away`,
+              id: `sel_${randomUUID().slice(0, 12)}`,
               marketId,
               key: 'AWAY',
               label: dto.awayTeam.trim(),
@@ -124,25 +128,25 @@ export class MatchesService {
       ],
     };
 
-    this.matches.unshift(match);
+    const saved = await this.matchesRepository.saveNewMatch(match);
     this.appendAudit(
       actorRole,
       'MATCH_CREATED',
-      match.id,
-      `Creado ${match.homeTeam} vs ${match.awayTeam} (${match.kickoffAt})`,
+      saved.id,
+      `Creado ${saved.homeTeam} vs ${saved.awayTeam} (${saved.kickoffAt})`,
       actorUserId,
     );
 
-    return this.evaluateMatchMarketsWithClock(match);
+    return this.evaluateAndPersistAutoClose(saved);
   }
 
-  transitionMatchStatus(
+  async transitionMatchStatus(
     matchId: string,
     dto: UpdateMatchStatusDto,
     actorRole: AppRole,
     actorUserId: string | null = null,
-  ): MatchWithMarkets {
-    const match = this.findMutableMatchOrThrow(matchId);
+  ): Promise<MatchWithMarkets> {
+    const match = await this.findMutableMatchOrThrow(matchId);
     const previousStatus = match.status;
 
     if (!canTransitionMatchStatus(previousStatus, dto.status)) {
@@ -191,24 +195,26 @@ export class MatchesService {
       }
     }
 
+    const saved = await this.matchesRepository.saveUpdatedMatch(match);
+
     this.appendAudit(
       actorRole,
       'MATCH_STATUS_CHANGED',
-      match.id,
-      `Estado ${previousStatus} -> ${dto.status} (${String(match.score.home)}-${String(match.score.away)})`,
+      saved.id,
+      `Estado ${previousStatus} -> ${dto.status} (${String(saved.score.home)}-${String(saved.score.away)})`,
       actorUserId,
     );
 
-    return this.evaluateMatchMarketsWithClock(match);
+    return this.evaluateAndPersistAutoClose(saved);
   }
 
-  createMarket(
+  async createMarket(
     matchId: string,
     dto: CreateMarketDto,
     actorRole: AppRole,
     actorUserId: string | null = null,
-  ): BettingMarket {
-    const match = this.findMutableMatchOrThrow(matchId);
+  ): Promise<BettingMarket> {
+    const match = await this.findMutableMatchOrThrow(matchId);
     const serverNow = this.clock.now();
 
     if (
@@ -226,7 +232,7 @@ export class MatchesService {
       }
     }
 
-    const marketId = `mkt_${String(++this.sequence)}`;
+    const marketId = `mkt_${randomUUID().slice(0, 12)}`;
     const market: BettingMarket = {
       id: marketId,
       matchId: match.id,
@@ -236,7 +242,7 @@ export class MatchesService {
       status: 'open',
       closedReason: null,
       selections: dto.selections.map((sel) => ({
-        id: `sel_${String(++this.sequence)}`,
+        id: `sel_${randomUUID().slice(0, 12)}`,
         marketId,
         key: sel.key.trim(),
         label: sel.label.trim(),
@@ -244,29 +250,33 @@ export class MatchesService {
       })),
     };
 
-    match.markets.push(market);
-    match.updatedAt = serverNow.toISOString();
+    const savedMarket = await this.matchesRepository.addMarketToMatch(
+      match.id,
+      market,
+      serverNow.toISOString(),
+    );
 
     this.appendAudit(
       actorRole,
       'MARKET_CREATED',
       match.id,
-      `Mercado '${market.name}' (${market.type}) creado`,
+      `Mercado '${savedMarket.name}' (${savedMarket.type}) creado`,
       actorUserId,
     );
 
-    return market;
+    return savedMarket;
   }
 
-  updateMarketOdds(
+  async updateMarketOdds(
     matchId: string,
     marketId: string,
     dto: UpdateMarketOddsDto,
     actorRole: AppRole,
     actorUserId: string | null = null,
-  ): BettingMarket {
-    const match = this.findMutableMatchOrThrow(matchId);
-    this.evaluateMatchMarketsWithClock(match);
+  ): Promise<BettingMarket> {
+    const match = await this.evaluateAndPersistAutoClose(
+      await this.findMutableMatchOrThrow(matchId),
+    );
 
     const market = match.markets.find((item) => item.id === marketId);
     if (!market) {
@@ -303,27 +313,62 @@ export class MatchesService {
       changes.push(`${target.key}:${String(prevOdds)}->${String(target.odds)}`);
     }
 
-    match.updatedAt = serverNow.toISOString();
+    const updatedMarket = await this.matchesRepository.saveUpdatedMarket(
+      match.id,
+      market,
+      serverNow.toISOString(),
+    );
+
     this.appendAudit(
       actorRole,
       'ODDS_UPDATED',
       match.id,
-      `Cuotas actualizadas en ${market.id} (${changes.join(', ')})`,
+      `Cuotas actualizadas en ${updatedMarket.id} (${changes.join(', ')})`,
       actorUserId,
     );
 
-    return market;
+    return updatedMarket;
   }
 
-  applyExternalSyncHeartbeat(actorRole: AppRole, actorUserId: string | null = null): number {
+  async upsertExternalFixtures(
+    fixtures: readonly ExternalFixtureUpsertInput[],
+    actorRole: AppRole,
+    actorUserId: string | null = null,
+  ): Promise<number> {
     const nowIso = this.clock.now().toISOString();
+    let count = 0;
+
+    for (const fixture of fixtures) {
+      const saved = await this.matchesRepository.upsertExternalFixture(fixture, nowIso);
+      await this.evaluateAndPersistAutoClose(saved);
+      count += 1;
+    }
+
+    this.appendAudit(
+      actorRole,
+      'API_FOOTBALL_SYNC',
+      'global',
+      `Sincronización API-Football real aplicada (${String(count)} partidos procesados)`,
+      actorUserId,
+    );
+
+    return count;
+  }
+
+  async applyExternalSyncHeartbeat(
+    actorRole: AppRole,
+    actorUserId: string | null = null,
+  ): Promise<number> {
+    const nowIso = this.clock.now().toISOString();
+    const matches = await this.matchesRepository.findAll();
     let touched = 0;
 
-    for (const match of this.matches) {
-      this.evaluateMatchMarketsWithClock(match);
+    for (const match of matches) {
+      await this.evaluateAndPersistAutoClose(match);
       if (match.status === 'en_vivo') {
         match.elapsedMinute = Math.min(90, (match.elapsedMinute ?? 1) + 1);
         match.updatedAt = nowIso;
+        await this.matchesRepository.saveUpdatedMatch(match);
         touched += 1;
       }
     }
@@ -343,23 +388,29 @@ export class MatchesService {
     return this.auditLog;
   }
 
-  private findMutableMatchOrThrow(matchId: string): MatchWithMarkets {
-    const match = this.matches.find((item) => item.id === matchId);
+  private async findMutableMatchOrThrow(matchId: string): Promise<MatchWithMarkets> {
+    const match = await this.matchesRepository.findById(matchId);
     if (!match) {
       throw new NotFoundException(`Partido ${matchId} no encontrado.`);
     }
     return match;
   }
 
-  private evaluateMatchMarketsWithClock(match: MatchWithMarkets): MatchWithMarkets {
+  private async evaluateAndPersistAutoClose(match: MatchWithMarkets): Promise<MatchWithMarkets> {
     const serverNow = this.clock.now();
+    let changed = false;
 
     for (const market of match.markets) {
       if (market.status === 'open' && shouldAutoClosePreMatchMarket(match, market, serverNow)) {
         market.status = 'closed';
         market.closedReason =
           match.status === 'programado' ? 'match_started' : 'match_status_changed';
+        changed = true;
       }
+    }
+
+    if (changed) {
+      return this.matchesRepository.saveUpdatedMatch(match);
     }
 
     return match;
@@ -373,7 +424,7 @@ export class MatchesService {
     actorUserId: string | null = null,
   ): void {
     this.auditLog.push({
-      id: `aud_${String(++this.sequence)}`,
+      id: `aud_${randomUUID().slice(0, 12)}`,
       timestamp: this.clock.now().toISOString(),
       actorRole,
       action,

@@ -36,7 +36,16 @@ describe('Cross-Spec Integration: Auth + Wallet + Matches + Unified Audit (e2e)'
   let passwordService: PasswordService;
   let payphoneService: PayphoneService;
 
-  const verifierStub: EmailVerificationNotifier = {
+  const verifierStub: Pick<
+    EmailVerificationNotifier,
+    'buildVerificationUrl' | 'hasExternalMailTransport' | 'sendVerificationToken'
+  > = {
+    buildVerificationUrl(rawToken: string): string {
+      return `http://localhost:3000/verificar-correo?token=${encodeURIComponent(rawToken)}`;
+    },
+    hasExternalMailTransport(): boolean {
+      return false;
+    },
     sendVerificationToken(input: VerificationNotification): Promise<void> {
       sentVerifications.push(input);
       return Promise.resolve();

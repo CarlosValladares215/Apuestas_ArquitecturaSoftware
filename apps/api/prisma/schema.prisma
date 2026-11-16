@@ -30,6 +30,8 @@ model User {
   verificationTokens EmailVerificationToken[]
   refreshTokens      RefreshToken[]
   auditLogs          AuditLog[]
+  wallet             Wallet?
+  paymentIntents     PaymentIntent[]
 
   @@map("users")
 }
@@ -84,4 +86,155 @@ model AuditLog {
   @@index([actorUserId, createdAt], map: "idx_audit_logs_actor_created")
   @@index([action, createdAt], map: "idx_audit_logs_action_created")
   @@map("audit_logs")
+}
+
+model Wallet {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @unique @map("user_id") @db.Uuid
+  currency  String   @default("USD") @db.VarChar(3)
+  version   Int      @default(1)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("wallets")
+}
+
+model LedgerAccount {
+  id        String   @id @default(uuid()) @db.Uuid
+  code      String   @unique @db.VarChar(128)
+  type      String   @db.VarChar(32)
+  userId    String?  @map("user_id") @db.Uuid
+  currency  String   @default("USD") @db.VarChar(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  entries LedgerEntry[]
+
+  @@index([userId], map: "idx_ledger_accounts_user_id")
+  @@map("ledger_accounts")
+}
+
+model LedgerTransaction {
+  id             String   @id @default(uuid()) @db.Uuid
+  referenceCode  String   @map("reference_code") @db.VarChar(128)
+  type           String   @db.VarChar(32)
+  description    String   @db.VarChar(255)
+  idempotencyKey String   @unique @map("idempotency_key") @db.VarChar(128)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  entries LedgerEntry[]
+
+  @@index([referenceCode], map: "idx_ledger_transactions_reference")
+  @@index([createdAt(sort: Desc)], map: "idx_ledger_transactions_created_at")
+  @@map("ledger_transactions")
+}
+
+model LedgerEntry {
+  id            String   @id @default(uuid()) @db.Uuid
+  transactionId String   @map("transaction_id") @db.Uuid
+  accountId     String   @map("account_id") @db.Uuid
+  entryType     String   @map("entry_type") @db.VarChar(8)
+  amountCents   BigInt   @map("amount_cents")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  transaction LedgerTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  account     LedgerAccount     @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@index([accountId], map: "idx_ledger_entries_account_id")
+  @@index([transactionId], map: "idx_ledger_entries_tx_id")
+  @@map("ledger_entries")
+}
+
+model PaymentIntent {
+  id                  String   @id @default(uuid()) @db.Uuid
+  userId              String   @map("user_id") @db.Uuid
+  clientTransactionId String   @unique @map("client_transaction_id") @db.VarChar(128)
+  amountCents         BigInt   @map("amount_cents")
+  currency            String   @default("USD") @db.VarChar(3)
+  status              String   @default("PENDING") @db.VarChar(32)
+  payphoneTxId        String?  @map("payphone_tx_id") @db.VarChar(128)
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_payment_intents_user_id")
+  @@map("payment_intents")
+}
+
+model Competition {
+  id         String  @id @db.VarChar(64)
+  name       String  @db.VarChar(128)
+  country    String  @db.VarChar(64)
+  sport      String  @default("football") @db.VarChar(32)
+  externalId Int?    @unique @map("external_id")
+
+  matches Match[]
+
+  @@map("competitions")
+}
+
+model Match {
+  id            String   @id @db.VarChar(64)
+  competitionId String   @map("competition_id") @db.VarChar(64)
+  externalId    Int?     @unique @map("external_id")
+  homeTeam      String   @map("home_team") @db.VarChar(128)
+  awayTeam      String   @map("away_team") @db.VarChar(128)
+  kickoffAt     DateTime @map("kickoff_at") @db.Timestamptz(6)
+  status        String   @db.VarChar(24)
+  homeScore     Int      @default(0) @map("home_score")
+  awayScore     Int      @default(0) @map("away_score")
+  elapsedMinute Int?     @map("elapsed_minute")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  competition Competition     @relation(fields: [competitionId], references: [id], onDelete: Restrict)
+  markets     BettingMarket[]
+
+  @@index([status], map: "idx_matches_status")
+  @@index([competitionId], map: "idx_matches_competition_id")
+  @@map("matches")
+}
+
+model BettingMarket {
+  id           String   @id @db.VarChar(64)
+  matchId      String   @map("match_id") @db.VarChar(64)
+  type         String   @db.VarChar(64)
+  name         String   @db.VarChar(128)
+  isPreMatch   Boolean  @default(true) @map("is_pre_match")
+  status       String   @db.VarChar(24)
+  closedReason String?  @map("closed_reason") @db.VarChar(48)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  match      Match             @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  selections MarketSelection[]
+
+  @@index([matchId], map: "idx_betting_markets_match_id")
+  @@map("betting_markets")
+}
+
+model MarketSelection {
+  id       String  @id @db.VarChar(64)
+  marketId String  @map("market_id") @db.VarChar(64)
+  key      String  @db.VarChar(32)
+  label    String  @db.VarChar(128)
+  odds     Decimal @db.Decimal(10, 4)
+
+  market BettingMarket @relation(fields: [marketId], references: [id], onDelete: Cascade)
+
+  @@unique([marketId, key], map: "uq_market_selections_market_key")
+  @@map("market_selections")
+}
+
+model ApiFootballQuotaState {
+  id              String    @id @db.VarChar(32)
+  dateUtc         String    @map("date_utc") @db.VarChar(10)
+  usedToday       Int       @default(0) @map("used_today")
+  lastSyncAt      DateTime? @map("last_sync_at") @db.Timestamptz(6)
+  lastSyncOutcome String    @default("idle") @map("last_sync_outcome") @db.VarChar(32)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("api_football_quota_state")
 }

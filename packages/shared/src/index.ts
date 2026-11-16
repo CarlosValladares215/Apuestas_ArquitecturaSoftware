@@ -315,6 +315,7 @@ export interface RegisterResponse {
   user: AuthUserView;
   verificationRequired: true;
   message: string;
+  sandboxVerificationUrl?: string;
 }
 
 export interface AuthSessionResponse {

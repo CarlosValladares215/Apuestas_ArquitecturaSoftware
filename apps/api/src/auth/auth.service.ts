@@ -5,13 +5,16 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
+  OnModuleInit,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import {
   AUTH_ERROR_CODES,
+  AppRole,
   AuthSessionResponse,
   RegisterResponse,
   TotpSetupResponse,
@@ -19,6 +22,7 @@ import {
   validatePasswordStrength,
 } from '@apuestas/shared';
 import { AuditService } from '../audit/audit.service';
+import { isPrismaStorageEnabled } from '../prisma/storage-mode';
 import {
   USER_REPOSITORY,
   UserRecord,
@@ -62,7 +66,9 @@ export interface AuthSessionResult extends AuthSessionResponse {
 }
 
 @Injectable()
-export class AuthService {
+export class AuthService implements OnModuleInit {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     @Inject(USER_REPOSITORY)
     private readonly userRepository: UserRepository,
@@ -79,6 +85,52 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
   ) {}
+
+  async onModuleInit(): Promise<void> {
+    const nodeEnv = this.config.get<string>('NODE_ENV') ?? process.env.NODE_ENV ?? 'development';
+    if (nodeEnv === 'test' || isPrismaStorageEnabled(this.config)) {
+      return;
+    }
+
+    await this.seedMemoryUserIfConfigured(
+      this.config.get<string>('SEED_ADMIN_EMAIL') ?? process.env.SEED_ADMIN_EMAIL,
+      this.config.get<string>('SEED_ADMIN_PASSWORD') ?? process.env.SEED_ADMIN_PASSWORD,
+      'admin',
+    );
+    await this.seedMemoryUserIfConfigured(
+      this.config.get<string>('SEED_OPERATOR_EMAIL') ?? process.env.SEED_OPERATOR_EMAIL,
+      this.config.get<string>('SEED_OPERATOR_PASSWORD') ?? process.env.SEED_OPERATOR_PASSWORD,
+      'operator',
+    );
+  }
+
+  private async seedMemoryUserIfConfigured(
+    rawEmail: string | undefined,
+    rawPassword: string | undefined,
+    role: AppRole,
+  ): Promise<void> {
+    const email = normalizeEmail(rawEmail ?? '');
+    const password = (rawPassword ?? '').trim();
+    if (!email || password.length < 10) {
+      return;
+    }
+
+    const existing = await this.userRepository.findByEmail(email);
+    if (existing) {
+      return;
+    }
+
+    const passwordHash = await this.passwordService.hash(password);
+    const now = new Date();
+    await this.userRepository.create({
+      email,
+      passwordHash,
+      role,
+      adultConfirmedAt: now,
+      emailVerifiedAt: now,
+    });
+    this.logger.log(`Seeded in-memory ${role} account from environment: ${email}`);
+  }
 
   async register(dto: RegisterDto, ctx: ClientRequestContext): Promise<RegisterResponse> {
     if (!dto.isAdultConfirmed) {
@@ -141,11 +193,25 @@ export class AuthService {
       metadata: { role: created.role },
     });
 
+    const sandboxEchoEnabled =
+      (this.config.get<string>('EMAIL_SANDBOX_ECHO') ??
+        process.env.EMAIL_SANDBOX_ECHO ??
+        'false') === 'true';
+    const hasExternalMailer =
+      typeof this.verificationNotifier.hasExternalMailTransport === 'function'
+        ? this.verificationNotifier.hasExternalMailTransport()
+        : false;
+    const sandboxVerificationUrl =
+      sandboxEchoEnabled && !hasExternalMailer
+        ? this.verificationNotifier.buildVerificationUrl(rawVerificationToken)
+        : undefined;
+
     return {
       user: toAuthUserView(created),
       verificationRequired: true,
       message:
         'Cuenta creada. Revisa tu correo para verificar tu dirección antes de iniciar sesión.',
+      ...(sandboxVerificationUrl ? { sandboxVerificationUrl } : {}),
     };
   }
 

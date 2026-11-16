@@ -14,17 +14,33 @@ export class PayphoneService {
   private readonly logger = new Logger(PayphoneService.name);
   private readonly apiUrl: string;
   private readonly token: string;
-  private readonly clientId: string;
+  private readonly storeId: string;
+  private readonly frontendUrl: string;
 
   constructor(private readonly configService: ConfigService) {
-    this.apiUrl =
-      this.configService.get<string>('PAYPHONE_API_URL') || 'https://pay.payphonetodoesposible.com';
-    this.token = this.configService.get<string>('PAYPHONE_TOKEN') || 'sandbox_test_token';
-    this.clientId = this.configService.get<string>('PAYPHONE_CLIENT_ID') || 'sandbox_client_id';
+    this.apiUrl = (
+      this.configService.get<string>('PAYPHONE_API_URL') ?? 'https://pay.payphonetodoesposible.com'
+    )
+      .trim()
+      .replace(/\/$/, '');
+    this.token = (this.configService.get<string>('PAYPHONE_TOKEN') ?? 'sandbox_test_token').trim();
+    this.storeId = (
+      this.configService.get<string>('PAYPHONE_STORE_ID') ??
+      this.configService.get<string>('PAYPHONE_CLIENT_ID') ??
+      'sandbox_client_id'
+    ).trim();
+    this.frontendUrl = (
+      this.configService.get<string>('FRONTEND_URL') ??
+      this.configService.get<string>('CORS_ORIGIN')?.split(',')[0] ??
+      'http://localhost:3000'
+    )
+      .trim()
+      .replace(/\/$/, '');
   }
 
   /**
-   * Prepares a sandbox payment session and returns the checkout URL.
+   * Prepares a payment session against Payphone Links API when a real token is configured,
+   * or returns a sandbox checkout return URL when running in academic/sandbox mode.
    * Note: As per Constitution Principles I & II, the user redirect NEVER credits funds.
    */
   async prepareSandboxPayment(params: {
@@ -32,15 +48,55 @@ export class PayphoneService {
     clientTransactionId: string;
     currency?: string;
   }): Promise<{ payphoneUrl: string; token: string }> {
-    await Promise.resolve();
     const currency = params.currency || 'USD';
-    this.logger.log(
-      `Preparing Payphone sandbox session for tx ${params.clientTransactionId}: ${String(params.amountInCents)} cents (${currency})`,
+    const hasRealToken = Boolean(
+      this.token &&
+      this.token !== 'sandbox_test_token' &&
+      this.token !== 'replace_with_payphone_sandbox_token' &&
+      process.env.NODE_ENV !== 'test',
     );
+
+    if (hasRealToken) {
+      try {
+        const response = await fetch(`${this.apiUrl}/api/Links`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${this.token}`,
+          },
+          body: JSON.stringify({
+            amount: params.amountInCents,
+            amountWithoutTax: params.amountInCents,
+            clientTransactionId: params.clientTransactionId,
+            currency,
+            storeId: this.storeId,
+            reference: 'Recarga Billetera UTPL',
+            responseUrl: `${this.frontendUrl}/wallet?clientTxId=${encodeURIComponent(params.clientTransactionId)}`,
+          }),
+        });
+
+        if (response.ok) {
+          const paymentLinkUrl = (await response.text()).replace(/^"|"$/g, '').trim();
+          if (paymentLinkUrl.startsWith('http')) {
+            return {
+              payphoneUrl: paymentLinkUrl,
+              token: `live_tok_${params.clientTransactionId}`,
+            };
+          }
+        }
+        this.logger.warn(
+          `Payphone Links API returned HTTP ${String(response.status)}; using sandbox fallback URL.`,
+        );
+      } catch (error) {
+        this.logger.warn(`Payphone prepare request failed: ${(error as Error).message}`);
+      }
+    }
 
     const payphoneUrl = `${this.apiUrl}/sandbox/checkout?clientTxId=${encodeURIComponent(
       params.clientTransactionId,
-    )}&amount=${String(params.amountInCents)}&currency=${currency}`;
+    )}&amount=${String(params.amountInCents)}&currency=${currency}&responseUrl=${encodeURIComponent(
+      `${this.frontendUrl}/wallet`,
+    )}`;
 
     return {
       payphoneUrl,
@@ -49,7 +105,7 @@ export class PayphoneService {
   }
 
   /**
-   * Performs strict server-to-server verification against Payphone's API.
+   * Performs strict server-to-server verification against Payphone's V2/Confirm API.
    * Validates transaction status, amount, currency and clientTransactionId.
    */
   async verifyWithPayphone(params: {
@@ -69,7 +125,7 @@ export class PayphoneService {
           Authorization: `Bearer ${this.token}`,
         },
         body: JSON.stringify({
-          id: params.payphoneTransactionId,
+          id: Number(params.payphoneTransactionId) || params.payphoneTransactionId,
           clientTxId: params.clientTransactionId,
         }),
       });
@@ -101,7 +157,6 @@ export class PayphoneService {
       };
     } catch (error) {
       this.logger.error(`Error communicating with Payphone API: ${(error as Error).message}`);
-      // Fallback for isolated unit tests / offline sandbox if not mocked
       return {
         status: 'Rejected',
         amountInCents: 0,

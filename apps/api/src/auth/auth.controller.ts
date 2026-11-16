@@ -28,7 +28,7 @@ function attachSessionCookies(res: Response, tokens: IssuedSessionTokens): void 
 
   res.cookie(REFRESH_TOKEN_COOKIE_NAME, tokens.refreshToken, {
     ...shared,
-    path: '/auth',
+    path: '/',
     maxAge: tokens.refreshMaxAgeMs,
   });
 }
@@ -36,7 +36,7 @@ function attachSessionCookies(res: Response, tokens: IssuedSessionTokens): void 
 function clearSessionCookies(res: Response): void {
   const shared = baseCookieOptions();
   res.clearCookie(ACCESS_TOKEN_COOKIE_NAME, { ...shared, path: '/' });
-  res.clearCookie(REFRESH_TOKEN_COOKIE_NAME, { ...shared, path: '/auth' });
+  res.clearCookie(REFRESH_TOKEN_COOKIE_NAME, { ...shared, path: '/' });
 }
 
 @Controller('auth')

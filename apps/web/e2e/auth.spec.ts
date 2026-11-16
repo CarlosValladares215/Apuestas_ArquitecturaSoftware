@@ -7,6 +7,7 @@ const AUTH_ROUTES = [
   '/seguridad',
   '/admin/usuarios',
   '/wallet',
+  '/operador',
 ];
 
 for (const route of AUTH_ROUTES) {

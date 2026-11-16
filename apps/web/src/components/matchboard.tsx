@@ -6,7 +6,8 @@ import {
   MatchStatus,
   MatchWithMarkets,
 } from '@apuestas/shared';
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { fetchMatches, fetchMatchSyncStatus } from '../lib/api-client';
 
 type StatusFilter = 'all' | MatchStatus;
 
@@ -49,23 +50,60 @@ export interface MatchboardProps {
 }
 
 export function Matchboard({ initialMatches, syncStatus }: Readonly<MatchboardProps>) {
+  const [matches, setMatches] = useState<readonly MatchWithMarkets[]>(initialMatches);
+  const [liveSyncStatus, setLiveSyncStatus] = useState<ApiFootballSyncStatus>(syncStatus);
+  const [dataSource, setDataSource] = useState<'fallback' | 'live'>('fallback');
+  const [refreshing, setRefreshing] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [selectedMatchId, setSelectedMatchId] = useState<string>(initialMatches[0]?.id ?? '');
   const [selectedOutcomeNotice, setSelectedOutcomeNotice] = useState<string | null>(null);
 
+  const refreshFromServer = useCallback(async (isMounted?: () => boolean) => {
+    setRefreshing(true);
+    try {
+      const [remoteMatches, remoteSync] = await Promise.all([
+        fetchMatches(),
+        fetchMatchSyncStatus(),
+      ]);
+      if (isMounted && !isMounted()) {
+        return;
+      }
+      if (remoteMatches.length > 0) {
+        setMatches(remoteMatches);
+      }
+      setLiveSyncStatus(remoteSync);
+      setDataSource('live');
+    } catch {
+      // Keeps SSR / fallback fixtures cleanly rendered when API is unreachable
+    } finally {
+      if (!isMounted || isMounted()) {
+        setRefreshing(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof globalThis.fetch !== 'function') {
+      return;
+    }
+    let mounted = true;
+    void refreshFromServer(() => mounted);
+    return () => {
+      mounted = false;
+    };
+  }, [refreshFromServer]);
+
   const filteredMatches =
-    statusFilter === 'all'
-      ? initialMatches
-      : initialMatches.filter((match) => match.status === statusFilter);
+    statusFilter === 'all' ? matches : matches.filter((match) => match.status === statusFilter);
 
   const activeMatch =
     filteredMatches.find((match) => match.id === selectedMatchId) ??
     filteredMatches[0] ??
-    initialMatches[0];
+    matches[0];
 
   const intervalSeconds =
-    syncStatus.recommendedIntervalMs !== null
-      ? Math.round(syncStatus.recommendedIntervalMs / 1000)
+    liveSyncStatus.recommendedIntervalMs !== null
+      ? Math.round(liveSyncStatus.recommendedIntervalMs / 1000)
       : null;
 
   return (
@@ -74,16 +112,22 @@ export function Matchboard({ initialMatches, syncStatus }: Readonly<MatchboardPr
         <div className="sync-banner-metric">
           <span className="sync-label">Presupuesto diario API-Football</span>
           <strong className="sync-value">
-            {syncStatus.remainingToday} / {syncStatus.dailyBudget} disponibles (reserva en vivo:{' '}
-            {syncStatus.liveReserve})
+            {liveSyncStatus.remainingToday} / {liveSyncStatus.dailyBudget} disponibles (reserva en
+            vivo: {liveSyncStatus.liveReserve})
           </strong>
         </div>
         <div className="sync-banner-metric">
           <span className="sync-label">Frecuencia adaptativa</span>
           <strong className="sync-value">
             {intervalSeconds !== null
-              ? `Cada ${String(intervalSeconds)} s (${String(syncStatus.activeLiveMatches)} en vivo)`
+              ? `Cada ${String(intervalSeconds)} s (${String(liveSyncStatus.activeLiveMatches)} en vivo)`
               : 'Pausada por límite diario'}
+          </strong>
+        </div>
+        <div className="sync-banner-metric">
+          <span className="sync-label">Origen de datos</span>
+          <strong className="sync-value">
+            {dataSource === 'live' ? 'API en vivo' : 'Cartelera inicial'}
           </strong>
         </div>
       </section>
@@ -106,6 +150,16 @@ export function Matchboard({ initialMatches, syncStatus }: Readonly<MatchboardPr
             </button>
           );
         })}
+        <button
+          type="button"
+          className="filter-chip"
+          disabled={refreshing}
+          onClick={() => {
+            void refreshFromServer();
+          }}
+        >
+          {refreshing ? 'Actualizando...' : 'Actualizar cartelera'}
+        </button>
       </div>
 
       <div className="matchboard-grid">

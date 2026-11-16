@@ -16,11 +16,25 @@ export default function RegisterPage() {
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [sandboxVerificationUrl, setSandboxVerificationUrl] = useState<string | null>(null);
+
+  function toVerificationHref(rawUrl: string): string {
+    try {
+      const parsed = new URL(rawUrl);
+      if (parsed.pathname === '/verificar-correo') {
+        return `${parsed.pathname}${parsed.search}`;
+      }
+      return rawUrl;
+    } catch {
+      return rawUrl;
+    }
+  }
 
   async function handleSubmit(event: SyntheticEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     setErrorMessage(null);
     setSuccessMessage(null);
+    setSandboxVerificationUrl(null);
 
     if (!isAdultConfirmed) {
       setErrorMessage('Debes confirmar explícitamente que eres mayor de 18 años para registrarte.');
@@ -47,6 +61,7 @@ export default function RegisterPage() {
         captchaToken,
       });
       setSuccessMessage(response.message);
+      setSandboxVerificationUrl(response.sandboxVerificationUrl ?? null);
       setPassword('');
     } catch (error) {
       if (error instanceof ApiClientError) {
@@ -156,6 +171,14 @@ export default function RegisterPage() {
             {successMessage ? (
               <div role="status" className="alert-success">
                 <p>{successMessage}</p>
+                {sandboxVerificationUrl ? (
+                  <p>
+                    Modo sandbox sin correo externo:{' '}
+                    <Link href={toVerificationHref(sandboxVerificationUrl)}>
+                      Abrir enlace directo de verificación
+                    </Link>
+                  </p>
+                ) : null}
                 <p>
                   <Link href="/verificar-correo">Continuar a verificación de correo</Link>
                 </p>

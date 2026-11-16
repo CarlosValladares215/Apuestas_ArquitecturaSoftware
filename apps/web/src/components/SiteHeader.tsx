@@ -4,6 +4,7 @@ import { APP_VERSION } from '@apuestas/shared';
 const NAV_ITEMS = [
   { href: '/', label: 'Cartelera' },
   { href: '/wallet', label: 'Billetera' },
+  { href: '/operador', label: 'Operador' },
   { href: '/registro', label: 'Registro' },
   { href: '/login', label: 'Ingresar' },
   { href: '/verificar-correo', label: 'Verificar correo' },

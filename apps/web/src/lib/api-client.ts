@@ -1,10 +1,16 @@
 import type {
+  ApiFootballSyncStatus,
   AppRole,
   AuditLogEntryView,
   AuthSessionResponse,
   AuthUserView,
+  BettingMarket,
+  ConfirmDepositResponseDto,
+  MatchStatus,
+  MatchWithMarkets,
   PaginatedResponse,
   RegisterResponse,
+  SyncQuotaPurpose,
   TotpSetupResponse,
 } from '@apuestas/shared';
 
@@ -167,5 +173,95 @@ export function fetchAdminAuditLogs(
   }
   return apiFetch<PaginatedResponse<AuditLogEntryView>>(`/admin/audit-logs?${params.toString()}`, {
     method: 'GET',
+  });
+}
+
+export function fetchMatches(
+  status?: MatchStatus,
+  competitionId?: string,
+): Promise<MatchWithMarkets[]> {
+  const params = new URLSearchParams();
+  if (status) {
+    params.set('status', status);
+  }
+  if (competitionId?.trim()) {
+    params.set('competitionId', competitionId.trim());
+  }
+  const qs = params.toString();
+  return apiFetch<MatchWithMarkets[]>(qs ? `/matches?${qs}` : '/matches', {
+    method: 'GET',
+  });
+}
+
+export function fetchMatchSyncStatus(): Promise<ApiFootballSyncStatus> {
+  return apiFetch<ApiFootballSyncStatus>('/matches/sync/status', {
+    method: 'GET',
+  });
+}
+
+export function confirmDeposit(
+  clientTransactionId: string,
+  payphoneTransactionId: string,
+): Promise<ConfirmDepositResponseDto> {
+  return apiFetch<ConfirmDepositResponseDto>('/api/v1/wallet/deposits/confirm', {
+    method: 'POST',
+    body: JSON.stringify({
+      clientTransactionId,
+      payphoneTransactionId,
+    }),
+  });
+}
+
+export interface CreateMatchPayload {
+  competitionId: string;
+  competitionName: string;
+  country: string;
+  homeTeam: string;
+  awayTeam: string;
+  kickoffAt: string;
+}
+
+export function createMatch(payload: CreateMatchPayload): Promise<MatchWithMarkets> {
+  return apiFetch<MatchWithMarkets>('/matches', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export interface UpdateMatchStatusPayload {
+  status: MatchStatus;
+  homeScore?: number;
+  awayScore?: number;
+  elapsedMinute?: number;
+}
+
+export function updateMatchStatus(
+  matchId: string,
+  payload: UpdateMatchStatusPayload,
+): Promise<MatchWithMarkets> {
+  return apiFetch<MatchWithMarkets>(`/matches/${encodeURIComponent(matchId)}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateMarketOdds(
+  matchId: string,
+  marketId: string,
+  selections: Array<{ key: string; odds: number }>,
+): Promise<BettingMarket> {
+  return apiFetch<BettingMarket>(
+    `/matches/${encodeURIComponent(matchId)}/markets/${encodeURIComponent(marketId)}/odds`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ selections }),
+    },
+  );
+}
+
+export function runMatchSync(purpose: SyncQuotaPurpose = 'live'): Promise<ApiFootballSyncStatus> {
+  return apiFetch<ApiFootballSyncStatus>('/matches/sync/run', {
+    method: 'POST',
+    body: JSON.stringify({ purpose }),
   });
 }
