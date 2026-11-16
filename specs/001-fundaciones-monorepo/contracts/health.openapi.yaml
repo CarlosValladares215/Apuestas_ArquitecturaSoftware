@@ -1,0 +1,40 @@
+openapi: 3.1.0
+info:
+  title: Apuestas Deportivas - Contratos Base de Salud (Spec 001)
+  version: 0.1.0
+  description: Contratos HTTP iniciales para verificación de vida de apps/api y apps/reports.
+paths:
+  /health:
+    get:
+      summary: Verifica el estado operativo del servicio
+      operationId: getHealth
+      responses:
+        '200':
+          description: Servicio disponible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      required:
+        - status
+        - service
+        - version
+        - timestamp
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+        service:
+          type: string
+          enum: [api, reports, web]
+        version:
+          type: string
+          example: '0.1.0'
+        timestamp:
+          type: string
+          format: date-time
+          example: '2026-11-14T21:00:00.000Z'

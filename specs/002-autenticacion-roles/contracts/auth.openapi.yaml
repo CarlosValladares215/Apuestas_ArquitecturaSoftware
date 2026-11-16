@@ -1,0 +1,177 @@
+openapi: 3.1.0
+info:
+  title: Apuestas Deportivas - API de Identidad, RBAC y Auditoría (Spec 002)
+  version: 0.2.0
+  description: Contratos HTTP de autenticación con cookies httpOnly, 2FA TOTP, RBAC y auditoría append-only.
+paths:
+  /auth/register:
+    post:
+      summary: Registrar nuevo usuario (rol bettor)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Usuario registrado pendiente de verificación de correo
+        '400':
+          description: Datos inválidos, menor de edad o CAPTCHA inválido
+        '409':
+          description: Correo ya registrado
+  /auth/verify-email:
+    post:
+      summary: Confirmar verificación de correo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+      responses:
+        '200':
+          description: Correo verificado correctamente
+        '400':
+          description: Token inválido, expirado o ya utilizado
+  /auth/login:
+    post:
+      summary: Iniciar sesión (emite cookies httpOnly)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Sesión iniciada con cookies httpOnly
+        '401':
+          description: Credenciales o código TOTP inválidos
+        '403':
+          description: Correo no verificado o cuenta bloqueada temporalmente
+        '429':
+          description: Límite de intentos excedido
+  /auth/refresh:
+    post:
+      summary: Rotar par de tokens mediante cookie refresh_token
+      responses:
+        '200':
+          description: Nuevo par de cookies httpOnly emitido
+        '401':
+          description: Refresh token faltante, expirado o reutilizado (revoca familia)
+  /auth/logout:
+    post:
+      summary: Cerrar sesión y revocar refresh token actual
+      responses:
+        '200':
+          description: Cookies limpiadas y sesión revocada
+  /auth/me:
+    get:
+      summary: Obtener perfil del usuario autenticado
+      responses:
+        '200':
+          description: Perfil seguro del usuario
+        '401':
+          description: No autenticado
+  /auth/2fa/setup:
+    post:
+      summary: Generar secreto y URI TOTP (no activa hasta verificar)
+      responses:
+        '200':
+          description: Secreto temporal y URI otpauth://
+  /auth/2fa/enable:
+    post:
+      summary: Confirmar código TOTP de 6 dígitos y activar 2FA
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+                  pattern: '^[0-9]{6}$'
+      responses:
+        '200':
+          description: 2FA activado
+        '400':
+          description: Código inválido o setup previo faltante
+  /admin/users:
+    get:
+      summary: Listar usuarios (solo admin)
+      responses:
+        '200':
+          description: Lista paginada de usuarios sin hashes ni secretos
+        '403':
+          description: Rol insuficiente
+  /admin/users/{id}/role:
+    patch:
+      summary: Cambiar rol de un usuario (solo admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  type: string
+                  enum: [bettor, operator, admin]
+      responses:
+        '200':
+          description: Rol actualizado y auditado
+        '400':
+          description: Auto-cambio prohibido o rol inválido
+        '403':
+          description: Rol insuficiente
+  /admin/audit-logs:
+    get:
+      summary: Consultar registros de auditoría append-only (solo admin)
+      responses:
+        '200':
+          description: Eventos de auditoría ordenados del más reciente al más antiguo
+        '403':
+          description: Rol insuficiente
+components:
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [email, password, isAdultConfirmed, captchaToken]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 10
+        isAdultConfirmed:
+          type: boolean
+        captchaToken:
+          type: string
+    LoginRequest:
+      type: object
+      required: [email, password, captchaToken]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+        captchaToken:
+          type: string
+        totpCode:
+          type: string
