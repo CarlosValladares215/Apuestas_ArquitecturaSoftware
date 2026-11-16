@@ -8,7 +8,14 @@ import {
   isPreMatchMarketOpen,
   shouldAutoClosePreMatchMarket,
 } from '@apuestas/shared';
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
+import { AuditService } from '../audit/audit.service';
 import { CLOCK_PORT, ServerClock } from './clock.provider';
 import {
   CreateMarketDto,
@@ -24,7 +31,10 @@ export class MatchesService {
   private readonly auditLog: MatchAuditEntry[] = [];
   private sequence = 100;
 
-  constructor(@Inject(CLOCK_PORT) private readonly clock: ServerClock) {}
+  constructor(
+    @Inject(CLOCK_PORT) private readonly clock: ServerClock,
+    @Optional() private readonly globalAuditService?: AuditService,
+  ) {}
 
   listMatches(filters?: { status?: MatchStatus; competitionId?: string }): MatchWithMarkets[] {
     const evaluated = this.matches.map((match) => this.evaluateMatchMarketsWithClock(match));
@@ -49,7 +59,11 @@ export class MatchesService {
     return this.evaluateMatchMarketsWithClock(match);
   }
 
-  createMatch(dto: CreateMatchDto, actorRole: AppRole): MatchWithMarkets {
+  createMatch(
+    dto: CreateMatchDto,
+    actorRole: AppRole,
+    actorUserId: string | null = null,
+  ): MatchWithMarkets {
     if (dto.homeTeam.trim().toLowerCase() === dto.awayTeam.trim().toLowerCase()) {
       throw new BadRequestException('El equipo local y visitante deben ser distintos.');
     }
@@ -116,6 +130,7 @@ export class MatchesService {
       'MATCH_CREATED',
       match.id,
       `Creado ${match.homeTeam} vs ${match.awayTeam} (${match.kickoffAt})`,
+      actorUserId,
     );
 
     return this.evaluateMatchMarketsWithClock(match);
@@ -125,6 +140,7 @@ export class MatchesService {
     matchId: string,
     dto: UpdateMatchStatusDto,
     actorRole: AppRole,
+    actorUserId: string | null = null,
   ): MatchWithMarkets {
     const match = this.findMutableMatchOrThrow(matchId);
     const previousStatus = match.status;
@@ -180,12 +196,18 @@ export class MatchesService {
       'MATCH_STATUS_CHANGED',
       match.id,
       `Estado ${previousStatus} -> ${dto.status} (${String(match.score.home)}-${String(match.score.away)})`,
+      actorUserId,
     );
 
     return this.evaluateMatchMarketsWithClock(match);
   }
 
-  createMarket(matchId: string, dto: CreateMarketDto, actorRole: AppRole): BettingMarket {
+  createMarket(
+    matchId: string,
+    dto: CreateMarketDto,
+    actorRole: AppRole,
+    actorUserId: string | null = null,
+  ): BettingMarket {
     const match = this.findMutableMatchOrThrow(matchId);
     const serverNow = this.clock.now();
 
@@ -230,6 +252,7 @@ export class MatchesService {
       'MARKET_CREATED',
       match.id,
       `Mercado '${market.name}' (${market.type}) creado`,
+      actorUserId,
     );
 
     return market;
@@ -240,6 +263,7 @@ export class MatchesService {
     marketId: string,
     dto: UpdateMarketOddsDto,
     actorRole: AppRole,
+    actorUserId: string | null = null,
   ): BettingMarket {
     const match = this.findMutableMatchOrThrow(matchId);
     this.evaluateMatchMarketsWithClock(match);
@@ -285,12 +309,13 @@ export class MatchesService {
       'ODDS_UPDATED',
       match.id,
       `Cuotas actualizadas en ${market.id} (${changes.join(', ')})`,
+      actorUserId,
     );
 
     return market;
   }
 
-  applyExternalSyncHeartbeat(actorRole: AppRole): number {
+  applyExternalSyncHeartbeat(actorRole: AppRole, actorUserId: string | null = null): number {
     const nowIso = this.clock.now().toISOString();
     let touched = 0;
 
@@ -308,6 +333,7 @@ export class MatchesService {
       'API_FOOTBALL_SYNC',
       'global',
       `Sincronización API-Football aplicada (${String(touched)} partidos en vivo actualizados)`,
+      actorUserId,
     );
 
     return touched;
@@ -344,6 +370,7 @@ export class MatchesService {
     action: MatchAuditEntry['action'],
     matchId: string,
     details: string,
+    actorUserId: string | null = null,
   ): void {
     this.auditLog.push({
       id: `aud_${String(++this.sequence)}`,
@@ -352,6 +379,17 @@ export class MatchesService {
       action,
       matchId,
       details,
+    });
+
+    void this.globalAuditService?.record({
+      actorUserId,
+      action,
+      targetType: 'Match',
+      targetId: matchId,
+      metadata: {
+        actorRole,
+        details,
+      },
     });
   }
 }

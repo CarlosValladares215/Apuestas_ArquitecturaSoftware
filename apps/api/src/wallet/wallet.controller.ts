@@ -17,6 +17,7 @@ import {
   WalletBalance,
   WalletMovementDto,
 } from '@apuestas/shared';
+import { AuthenticatedUser, CurrentUser } from '../auth/decorators/current-user.decorator';
 import { WalletService } from './services/wallet.service';
 import { CreateDepositIntentDto } from './dto/create-deposit-intent.dto';
 import { ConfirmDepositDto } from './dto/confirm-deposit.dto';
@@ -27,32 +28,31 @@ export class WalletController {
   constructor(private readonly walletService: WalletService) {}
 
   @Get('balance')
-  async getBalance(@Headers('x-user-id') userIdHeader?: string): Promise<WalletBalance> {
-    const userId = userIdHeader || 'usr_bettor_123';
-    return this.walletService.getBalance(userId);
+  async getBalance(@CurrentUser() user: AuthenticatedUser): Promise<WalletBalance> {
+    return this.walletService.getBalance(user.userId);
   }
 
   @Get('movements')
   async getMovements(
-    @Headers('x-user-id') userIdHeader?: string,
-    @Query('limit') limit = 20,
-    @Query('offset') offset = 0,
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('limit') limit = '20',
+    @Query('offset') offset = '0',
   ): Promise<{ movements: WalletMovementDto[]; total: number }> {
-    const userId = userIdHeader || 'usr_bettor_123';
-    return this.walletService.getMovements(userId, limit, offset);
+    const parsedLimit = Math.min(100, Math.max(1, Math.floor(Number(limit) || 20)));
+    const parsedOffset = Math.max(0, Math.floor(Number(offset) || 0));
+    return this.walletService.getMovements(user.userId, parsedLimit, parsedOffset);
   }
 
   @Post('deposits/intent')
   @HttpCode(HttpStatus.CREATED)
   async createDepositIntent(
     @Body() dto: CreateDepositIntentDto,
-    @Headers('x-user-id') userIdHeader?: string,
+    @CurrentUser() user: AuthenticatedUser,
     @Headers('idempotency-key') idempotencyKeyHeader?: string,
     @Ip() ipAddress?: string,
   ): Promise<DepositIntentResponseDto> {
-    const userId = userIdHeader || 'usr_bettor_123';
     return this.walletService.createDepositIntent({
-      userId,
+      userId: user.userId,
       amountInDollars: dto.amount,
       currency: dto.currency,
       idempotencyKey: idempotencyKeyHeader,
@@ -64,12 +64,15 @@ export class WalletController {
   @HttpCode(HttpStatus.OK)
   async confirmDeposit(
     @Body() dto: ConfirmDepositDto,
+    @CurrentUser() user: AuthenticatedUser,
     @Headers('idempotency-key') idempotencyKeyHeader?: string,
     @Ip() ipAddress?: string,
   ): Promise<ConfirmDepositResponseDto> {
     return this.walletService.confirmDeposit({
       clientTransactionId: dto.clientTransactionId,
       payphoneTransactionId: dto.payphoneTransactionId,
+      actorUserId: user.userId,
+      actorRole: user.role,
       idempotencyKey: idempotencyKeyHeader,
       ipAddress,
     });
@@ -79,13 +82,12 @@ export class WalletController {
   @HttpCode(HttpStatus.OK)
   async debit(
     @Body() dto: DebitWalletDto,
-    @Headers('x-user-id') userIdHeader?: string,
+    @CurrentUser() user: AuthenticatedUser,
     @Headers('idempotency-key') idempotencyKeyHeader?: string,
     @Ip() ipAddress?: string,
   ): Promise<DebitWalletResponseDto> {
-    const userId = userIdHeader || 'usr_bettor_123';
     return this.walletService.debit({
-      userId,
+      userId: user.userId,
       amountInCents: dollarsToCents(dto.amount),
       referenceCode: dto.referenceCode,
       description: dto.description,

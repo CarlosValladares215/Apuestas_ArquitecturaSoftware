@@ -75,5 +75,12 @@ describe('HomePage & Matchboard (005-partidos-mercados & 006-sincronizacion-api-
 
     expect(text).not.toMatch(/API_FOOTBALL_KEY|PAYPHONE_TOKEN|sandbox_secret/i);
     expect(screen.getByText(/solo presentación/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /billetera y depósitos/i })).toHaveAttribute(
+      'href',
+      '/wallet',
+    );
+    expect(
+      screen.getByRole('heading', { name: /arquitectura de tres servicios/i }),
+    ).toBeInTheDocument();
   });
 });

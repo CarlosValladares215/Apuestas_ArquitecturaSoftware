@@ -15,9 +15,10 @@ import {
   Patch,
   Post,
   Query,
-  Req,
-  UseGuards,
 } from '@nestjs/common';
+import { AuthenticatedUser, CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Public } from '../auth/decorators/public.decorator';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { ApiFootballSyncService } from './api-football-sync.service';
 import {
   CreateMarketDto,
@@ -26,7 +27,6 @@ import {
   UpdateMarketOddsDto,
   UpdateMatchStatusDto,
 } from './dto/matches.dto';
-import { OperatorRoleGuard, RequestWithActorRole } from './guards/operator-role.guard';
 import { MatchesService } from './matches.service';
 
 @Controller('matches')
@@ -36,6 +36,7 @@ export class MatchesController {
     private readonly syncService: ApiFootballSyncService,
   ) {}
 
+  @Public()
   @Get()
   listMatches(
     @Query('status') status?: string,
@@ -55,6 +56,7 @@ export class MatchesController {
     });
   }
 
+  @Public()
   @Get('sync/status')
   getSyncStatus(): ApiFootballSyncStatus {
     return this.syncService.getStatus();
@@ -62,50 +64,54 @@ export class MatchesController {
 
   @Post('sync/run')
   @HttpCode(200)
-  @UseGuards(OperatorRoleGuard)
-  runSync(@Body() dto: RunSyncDto, @Req() req: RequestWithActorRole): ApiFootballSyncStatus {
-    return this.syncService.runSyncCycle(dto.purpose ?? 'live', req.actorRole ?? 'operator');
+  @Roles('operator', 'admin')
+  runSync(@Body() dto: RunSyncDto, @CurrentUser() user: AuthenticatedUser): ApiFootballSyncStatus {
+    return this.syncService.runSyncCycle(dto.purpose ?? 'live', user.role, user.userId);
   }
 
+  @Public()
   @Get(':id')
   getMatchById(@Param('id') id: string): MatchWithMarkets {
     return this.matchesService.getMatchById(id);
   }
 
   @Post()
-  @UseGuards(OperatorRoleGuard)
-  createMatch(@Body() dto: CreateMatchDto, @Req() req: RequestWithActorRole): MatchWithMarkets {
-    return this.matchesService.createMatch(dto, req.actorRole ?? 'operator');
+  @Roles('operator', 'admin')
+  createMatch(
+    @Body() dto: CreateMatchDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ): MatchWithMarkets {
+    return this.matchesService.createMatch(dto, user.role, user.userId);
   }
 
   @Patch(':id/status')
-  @UseGuards(OperatorRoleGuard)
+  @Roles('operator', 'admin')
   updateMatchStatus(
     @Param('id') id: string,
     @Body() dto: UpdateMatchStatusDto,
-    @Req() req: RequestWithActorRole,
+    @CurrentUser() user: AuthenticatedUser,
   ): MatchWithMarkets {
-    return this.matchesService.transitionMatchStatus(id, dto, req.actorRole ?? 'operator');
+    return this.matchesService.transitionMatchStatus(id, dto, user.role, user.userId);
   }
 
   @Post(':id/markets')
-  @UseGuards(OperatorRoleGuard)
+  @Roles('operator', 'admin')
   createMarket(
     @Param('id') id: string,
     @Body() dto: CreateMarketDto,
-    @Req() req: RequestWithActorRole,
+    @CurrentUser() user: AuthenticatedUser,
   ): BettingMarket {
-    return this.matchesService.createMarket(id, dto, req.actorRole ?? 'operator');
+    return this.matchesService.createMarket(id, dto, user.role, user.userId);
   }
 
   @Patch(':id/markets/:marketId/odds')
-  @UseGuards(OperatorRoleGuard)
+  @Roles('operator', 'admin')
   updateMarketOdds(
     @Param('id') id: string,
     @Param('marketId') marketId: string,
     @Body() dto: UpdateMarketOddsDto,
-    @Req() req: RequestWithActorRole,
+    @CurrentUser() user: AuthenticatedUser,
   ): BettingMarket {
-    return this.matchesService.updateMarketOdds(id, marketId, dto, req.actorRole ?? 'operator');
+    return this.matchesService.updateMarketOdds(id, marketId, dto, user.role, user.userId);
   }
 }

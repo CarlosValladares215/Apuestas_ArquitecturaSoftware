@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { DepositIntentResponseDto } from '@apuestas/shared';
+import { API_BASE_URL } from '../../../lib/api-client';
 
 interface DepositFormProps {
   onIntentCreated?: (intent: DepositIntentResponseDto) => void;
@@ -26,8 +27,9 @@ export function DepositForm({ onIntentCreated, onRefreshBalance }: DepositFormPr
 
     setLoading(true);
     try {
-      const response = await fetch('/api/v1/wallet/deposits/intent', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/wallet/deposits/intent`, {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
           'idempotency-key': `web_intent_${String(Date.now())}`,

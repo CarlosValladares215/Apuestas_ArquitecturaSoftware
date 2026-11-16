@@ -461,6 +461,52 @@ button:focus-visible {
   color: var(--accent-pitch);
 }
 
+.principles-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.875rem;
+}
+
+.principle-item {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-line);
+  border-left: 4px solid var(--accent-pitch);
+  border-radius: 8px;
+  padding: 0.875rem 1rem;
+}
+
+.principle-title {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.principle-desc {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--ink-muted);
+}
+
+.board-card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-line);
+  border-radius: 10px;
+  padding: 1.25rem;
+}
+
+.board-heading {
+  margin: 0 0 0.25rem;
+  font-size: 1.125rem;
+}
+
+.board-subtitle {
+  margin: 0 0 1rem;
+  font-size: 0.875rem;
+  color: var(--ink-muted);
+}
+
 /* ========================================================================== */
 /* WALLET & LEDGER STYLES (Spec 003 & 004 - Phase F2)                         */
 /* ========================================================================== */
@@ -505,12 +551,6 @@ button:focus-visible {
   justify-content: space-between;
   gap: 0.75rem;
   margin-bottom: 1rem;
-}
-
-.topbar-nav {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
 }
 
 .nav-link {
@@ -648,43 +688,6 @@ button:focus-visible {
   color: #991b1b;
   border-radius: 6px;
   font-size: 0.875rem;
-}
-
-/* Buttons */
-.btn-primary {
-  padding: 0.75rem 1.25rem;
-  background-color: var(--accent-pitch);
-  color: #ffffff;
-  border: none;
-  border-radius: 6px;
-  font-weight: 600;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: background-color 0.15s ease;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background-color: #115e59;
-}
-
-.btn-primary:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-secondary {
-  padding: 0.4rem 0.875rem;
-  background-color: var(--bg-surface);
-  color: var(--ink-primary);
-  border: 1px solid var(--border-line);
-  border-radius: 6px;
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background-color: var(--bg-canvas);
 }
 
 .btn-external {
@@ -1049,10 +1052,18 @@ button:focus-visible {
   cursor: not-allowed;
 }
 
+.btn-primary:hover:not(:disabled) {
+  background-color: #115e59;
+}
+
 .btn-secondary {
   background-color: var(--bg-surface);
   color: var(--ink-primary);
   border: 1px solid var(--border-line);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: var(--bg-canvas);
 }
 
 .alert-error,

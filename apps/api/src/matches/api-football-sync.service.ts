@@ -72,6 +72,7 @@ export class ApiFootballSyncService {
   runSyncCycle(
     purpose: SyncQuotaPurpose = 'live',
     actorRole: AppRole = 'operator',
+    actorUserId: string | null = null,
   ): ApiFootballSyncStatus {
     this.ensureUtcDayRollover();
 
@@ -98,7 +99,7 @@ export class ApiFootballSyncService {
     this.usedToday += 1;
     this.lastSyncAt = this.clock.now().toISOString();
     this.lastSyncOutcome = 'updated';
-    this.matchesService.applyExternalSyncHeartbeat(actorRole);
+    this.matchesService.applyExternalSyncHeartbeat(actorRole, actorUserId);
 
     return this.getStatus();
   }

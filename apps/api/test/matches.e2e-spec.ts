@@ -1,12 +1,55 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { AppRole } from '@apuestas/shared';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
+import { PasswordService } from '../src/auth/password.service';
 import { configureAppSecurity } from '../src/bootstrap';
+import { USER_REPOSITORY, UserRepository } from '../src/users/user.repository';
+
+function extractAccessCookie(headers: unknown): string {
+  const list = Array.isArray(headers)
+    ? headers.filter((item): item is string => typeof item === 'string')
+    : typeof headers === 'string'
+      ? [headers]
+      : [];
+
+  for (const line of list) {
+    const first = line.split(';')[0] ?? '';
+    if (first.startsWith('access_token=')) {
+      return first;
+    }
+  }
+  return '';
+}
 
 describe('MatchesController (e2e)', () => {
   let app: INestApplication<App>;
+  let userRepo: UserRepository;
+  let passwordService: PasswordService;
+
+  async function loginAsRole(email: string, role: AppRole): Promise<string> {
+    const hash = await passwordService.hash('MatchesPass2026');
+    await userRepo.create({
+      email,
+      passwordHash: hash,
+      role,
+      adultConfirmedAt: new Date(),
+      emailVerifiedAt: new Date(),
+    });
+
+    const loginRes = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({
+        email,
+        password: 'MatchesPass2026',
+        captchaToken: 'test-captcha-ok',
+      })
+      .expect(200);
+
+    return extractAccessCookie(loginRes.headers['set-cookie']);
+  }
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -15,6 +58,8 @@ describe('MatchesController (e2e)', () => {
 
     app = moduleRef.createNestApplication();
     configureAppSecurity(app);
+    userRepo = moduleRef.get<UserRepository>(USER_REPOSITORY);
+    passwordService = moduleRef.get<PasswordService>(PasswordService);
     await app.init();
   });
 
@@ -22,7 +67,7 @@ describe('MatchesController (e2e)', () => {
     await app.close();
   });
 
-  it('GET /matches returns the matchboard with markets and selections', async () => {
+  it('GET /matches returns the matchboard publicly with markets and selections', async () => {
     const response = await request(app.getHttpServer()).get('/matches').expect(200);
     const matches = response.body as Array<{
       id: string;
@@ -35,7 +80,7 @@ describe('MatchesController (e2e)', () => {
     expect(matches[0]?.markets.length).toBeGreaterThan(0);
   });
 
-  it('enforces RBAC: rejects operator mutations from bettor or unauthenticated requests with 403', async () => {
+  it('enforces real JWT RBAC: rejects unauthenticated (401), spoofed headers (401), and bettor (403)', async () => {
     await request(app.getHttpServer())
       .post('/matches')
       .send({
@@ -46,11 +91,27 @@ describe('MatchesController (e2e)', () => {
         awayTeam: 'Macará',
         kickoffAt: '2027-02-20T20:00:00.000Z',
       })
-      .expect(403);
+      .expect(401);
+
+    // Spoofing x-user-role without valid JWT session must still be rejected with 401
+    await request(app.getHttpServer())
+      .post('/matches')
+      .set('x-user-role', 'admin')
+      .send({
+        competitionId: 'comp_ligapro',
+        competitionName: 'LigaPro Serie A',
+        country: 'Ecuador',
+        homeTeam: 'El Nacional',
+        awayTeam: 'Macará',
+        kickoffAt: '2027-02-20T20:00:00.000Z',
+      })
+      .expect(401);
+
+    const bettorCookie = await loginAsRole('matches.bettor@utpl.edu.ec', 'bettor');
 
     await request(app.getHttpServer())
       .post('/matches')
-      .set('x-user-role', 'bettor')
+      .set('Cookie', [bettorCookie])
       .send({
         competitionId: 'comp_ligapro',
         competitionName: 'LigaPro Serie A',
@@ -62,10 +123,13 @@ describe('MatchesController (e2e)', () => {
       .expect(403);
   });
 
-  it('allows operator to create match, update manual odds, transition status, and run API-Football sync', async () => {
+  it('allows authenticated operator/admin to create match, update odds, transition status, and run API-Football sync', async () => {
+    const operatorCookie = await loginAsRole('matches.operator@utpl.edu.ec', 'operator');
+    const adminCookie = await loginAsRole('matches.admin@utpl.edu.ec', 'admin');
+
     const createRes = await request(app.getHttpServer())
       .post('/matches')
-      .set('x-user-role', 'operator')
+      .set('Cookie', [operatorCookie])
       .send({
         competitionId: 'comp_ligapro',
         competitionName: 'LigaPro Serie A',
@@ -87,16 +151,15 @@ describe('MatchesController (e2e)', () => {
 
     await request(app.getHttpServer())
       .patch(`/matches/${createdMatch.id}/markets/${defaultMarketId}/odds`)
-      .set('x-user-role', 'operator')
+      .set('Cookie', [operatorCookie])
       .send({
         selections: [{ key: 'HOME', odds: 2.05 }],
       })
       .expect(200);
 
-    // Transition to en_vivo automatically closes pre-match markets
     const liveRes = await request(app.getHttpServer())
       .patch(`/matches/${createdMatch.id}/status`)
-      .set('x-user-role', 'operator')
+      .set('Cookie', [operatorCookie])
       .send({
         status: 'en_vivo',
         homeScore: 1,
@@ -112,10 +175,9 @@ describe('MatchesController (e2e)', () => {
     expect(liveBody.status).toBe('en_vivo');
     expect(liveBody.markets.every((m) => !m.isPreMatch || m.status === 'closed')).toBe(true);
 
-    // Sync status and run
     const syncRes = await request(app.getHttpServer())
       .post('/matches/sync/run')
-      .set('x-user-role', 'admin')
+      .set('Cookie', [adminCookie])
       .send({ purpose: 'live' })
       .expect(200);
 

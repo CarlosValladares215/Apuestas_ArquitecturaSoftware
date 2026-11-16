@@ -1,6 +1,13 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Inject,
+  Injectable,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import {
+  AppRole,
   centsToDollars,
   ConfirmDepositResponseDto,
   DebitWalletResponseDto,
@@ -9,6 +16,7 @@ import {
   WalletBalance,
   WalletMovementDto,
 } from '@apuestas/shared';
+import { AuditService } from '../../audit/audit.service';
 import { LedgerService } from './ledger.service';
 import { PayphoneService } from './payphone.service';
 import { IWalletRepository, WALLET_REPOSITORY } from '../repositories/wallet.repository.interface';
@@ -37,6 +45,8 @@ export class WalletService {
     private readonly auditLogRepository: IAuditLogRepository,
     @Inject(LEDGER_REPOSITORY)
     private readonly ledgerRepository: ILedgerRepository,
+    @Optional()
+    private readonly globalAuditService?: AuditService,
   ) {}
 
   /**
@@ -94,10 +104,11 @@ export class WalletService {
       currency: 'USD',
     });
 
-    await this.auditLogRepository.record({
+    await this.recordWalletAudit({
       userId: params.userId,
       action: 'DEPOSIT_INTENT_CREATED',
       resource: 'payment_intents',
+      targetId: intent.id,
       details: {
         intentId: intent.id,
         clientTransactionId,
@@ -125,6 +136,8 @@ export class WalletService {
   async confirmDeposit(params: {
     clientTransactionId: string;
     payphoneTransactionId: string;
+    actorUserId?: string;
+    actorRole?: AppRole;
     idempotencyKey?: string;
     ipAddress?: string;
   }): Promise<ConfirmDepositResponseDto> {
@@ -135,6 +148,16 @@ export class WalletService {
     if (!initialIntent) {
       throw new NotFoundException(
         `Intención de pago '${params.clientTransactionId}' no encontrada`,
+      );
+    }
+
+    if (
+      params.actorUserId &&
+      initialIntent.userId !== params.actorUserId &&
+      params.actorRole !== 'admin'
+    ) {
+      throw new ForbiddenException(
+        'No tienes permisos para confirmar una intención de depósito de otro usuario.',
       );
     }
 
@@ -185,10 +208,11 @@ export class WalletService {
           params.payphoneTransactionId,
         );
 
-        await this.auditLogRepository.record({
+        await this.recordWalletAudit({
           userId: intent.userId,
           action: 'PAYMENT_TAMPERED_REJECTED',
           resource: 'payment_intents',
+          targetId: intent.id,
           details: {
             clientTransactionId: intent.clientTransactionId,
             expectedAmount: intent.amount,
@@ -233,10 +257,11 @@ export class WalletService {
         params.payphoneTransactionId,
       );
 
-      await this.auditLogRepository.record({
+      await this.recordWalletAudit({
         userId: intent.userId,
         action: 'DEPOSIT_CONFIRMED',
         resource: 'wallets',
+        targetId: intent.clientTransactionId,
         details: {
           clientTransactionId: intent.clientTransactionId,
           amountInCents: intent.amount,
@@ -293,10 +318,11 @@ export class WalletService {
         ],
       });
 
-      await this.auditLogRepository.record({
+      await this.recordWalletAudit({
         userId: params.userId,
         action: 'DIRECT_DEPOSIT_CREDITED',
         resource: 'wallets',
+        targetId: params.clientTransactionId,
         details: {
           clientTransactionId: params.clientTransactionId,
           amountInCents: params.amountInCents,
@@ -349,10 +375,11 @@ export class WalletService {
       );
 
       if (currentBalanceCents < params.amountInCents) {
-        await this.auditLogRepository.record({
+        await this.recordWalletAudit({
           userId: params.userId,
           action: 'DEBIT_REJECTED_INSUFFICIENT_FUNDS',
           resource: 'wallets',
+          targetId: params.referenceCode,
           details: {
             requiredCents: params.amountInCents,
             availableCents: currentBalanceCents,
@@ -387,10 +414,11 @@ export class WalletService {
 
       const remainingBalanceCents = currentBalanceCents - params.amountInCents;
 
-      await this.auditLogRepository.record({
+      await this.recordWalletAudit({
         userId: params.userId,
         action: 'WALLET_DEBITED',
         resource: 'wallets',
+        targetId: txResult.transaction.id,
         details: {
           transactionId: txResult.transaction.id,
           debitedCents: params.amountInCents,
@@ -416,5 +444,33 @@ export class WalletService {
     offset?: number,
   ): Promise<{ movements: WalletMovementDto[]; total: number }> {
     return this.ledgerService.getMovementsByUser(userId, limit, offset);
+  }
+
+  private async recordWalletAudit(input: {
+    userId: string;
+    action: string;
+    resource: string;
+    targetId?: string | null;
+    details: Record<string, unknown>;
+    ipAddress?: string;
+  }): Promise<void> {
+    await this.auditLogRepository.record({
+      userId: input.userId,
+      action: input.action,
+      resource: input.resource,
+      details: input.details,
+      ipAddress: input.ipAddress,
+    });
+
+    if (this.globalAuditService) {
+      await this.globalAuditService.record({
+        actorUserId: input.userId,
+        action: input.action,
+        targetType: input.resource,
+        targetId: input.targetId ?? input.userId,
+        ipAddress: input.ipAddress ?? null,
+        metadata: input.details,
+      });
+    }
   }
 }

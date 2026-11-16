@@ -1,6 +1,13 @@
 import { expect, test } from '@playwright/test';
 
-const AUTH_ROUTES = ['/registro', '/login', '/verificar-correo', '/seguridad', '/admin/usuarios'];
+const AUTH_ROUTES = [
+  '/registro',
+  '/login',
+  '/verificar-correo',
+  '/seguridad',
+  '/admin/usuarios',
+  '/wallet',
+];
 
 for (const route of AUTH_ROUTES) {
   test(`${route} renders semantic heading without horizontal overflow at 360px`, async ({

@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { APP_VERSION } from '@apuestas/shared';
 
 const NAV_ITEMS = [
-  { href: '/', label: 'Inicio' },
+  { href: '/', label: 'Cartelera' },
+  { href: '/wallet', label: 'Billetera' },
   { href: '/registro', label: 'Registro' },
   { href: '/login', label: 'Ingresar' },
   { href: '/verificar-correo', label: 'Verificar correo' },

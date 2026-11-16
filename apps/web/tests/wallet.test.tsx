@@ -139,5 +139,20 @@ describe('WalletPage (apps/web)', () => {
         /la acreditación solo ocurre tras la confirmación verificada servidor a servidor/i,
       ),
     ).toBeInTheDocument();
+
+    const firstCall = (global.fetch as jest.Mock).mock.calls[0] as [string, RequestInit];
+    expect(firstCall[1].credentials).toBe('include');
+  });
+
+  it('prompts for authentication when the server returns 401', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: () => Promise.resolve({ message: 'Unauthorized' }),
+    });
+
+    render(<WalletPage />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/debes iniciar sesión/i);
   });
 });

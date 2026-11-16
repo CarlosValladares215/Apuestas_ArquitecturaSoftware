@@ -269,8 +269,8 @@ export default function HomePage() {
             Arquitectura de tres servicios
           </h2>
           <p className="board-subtitle">
-            Aplicación Web (Next.js en Vercel), API Principal (NestJS con ledger inmutable y RBAC
-            en Render) y Servicio de Reportes (FastAPI en Render).
+            Aplicación Web (Next.js en Vercel), API Principal (NestJS con ledger inmutable y RBAC en
+            Render) y Servicio de Reportes (FastAPI en Render).
           </p>
         </aside>
       </main>

@@ -3,7 +3,9 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
+import { PasswordService } from '../src/auth/password.service';
 import { configureAppSecurity } from '../src/bootstrap';
+import { USER_REPOSITORY, UserRepository } from '../src/users/user.repository';
 import { PayphoneService } from '../src/wallet/services/payphone.service';
 
 interface BalancePayload {
@@ -44,9 +46,55 @@ interface MovementsPayload {
   }>;
 }
 
+function extractAccessCookie(headers: unknown): string {
+  const list = Array.isArray(headers)
+    ? headers.filter((item): item is string => typeof item === 'string')
+    : typeof headers === 'string'
+      ? [headers]
+      : [];
+
+  for (const line of list) {
+    const first = line.split(';')[0] ?? '';
+    if (first.startsWith('access_token=')) {
+      return first;
+    }
+  }
+  return '';
+}
+
 describe('WalletController (e2e)', () => {
   let app: INestApplication<App>;
   let payphoneService: PayphoneService;
+  let userRepo: UserRepository;
+  let passwordService: PasswordService;
+
+  async function createVerifiedUserAndCookie(email: string): Promise<{
+    userId: string;
+    cookie: string;
+  }> {
+    const hash = await passwordService.hash('WalletPass2026');
+    const created = await userRepo.create({
+      email,
+      passwordHash: hash,
+      role: 'bettor',
+      adultConfirmedAt: new Date(),
+      emailVerifiedAt: new Date(),
+    });
+
+    const loginRes = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({
+        email,
+        password: 'WalletPass2026',
+        captchaToken: 'test-captcha-ok',
+      })
+      .expect(200);
+
+    return {
+      userId: created.id,
+      cookie: extractAccessCookie(loginRes.headers['set-cookie']),
+    };
+  }
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -56,6 +104,8 @@ describe('WalletController (e2e)', () => {
     app = moduleRef.createNestApplication();
     configureAppSecurity(app);
     payphoneService = moduleRef.get<PayphoneService>(PayphoneService);
+    userRepo = moduleRef.get<UserRepository>(USER_REPOSITORY);
+    passwordService = moduleRef.get<PasswordService>(PasswordService);
     await app.init();
   });
 
@@ -63,15 +113,29 @@ describe('WalletController (e2e)', () => {
     await app.close();
   });
 
-  it('GET /api/v1/wallet/balance returns initial 0 balance', async () => {
+  it('rejects unauthenticated wallet calls with 401 and ignores spoofed x-user-id header', async () => {
+    await request(app.getHttpServer())
+      .get('/api/v1/wallet/balance')
+      .set('x-user-id', 'victim-id')
+      .expect(401);
+
+    await request(app.getHttpServer())
+      .post('/api/v1/wallet/deposits/intent')
+      .send({ amount: 25.0 })
+      .expect(401);
+  });
+
+  it('GET /api/v1/wallet/balance returns initial 0 balance for authenticated user', async () => {
+    const bettor = await createVerifiedUserAndCookie('wallet.one@utpl.edu.ec');
+
     const response = await request(app.getHttpServer())
       .get('/api/v1/wallet/balance')
-      .set('x-user-id', 'usr_e2e_bettor_1')
+      .set('Cookie', [bettor.cookie])
       .expect(200);
 
     const body = response.body as unknown as BalancePayload;
     expect(body).toMatchObject({
-      userId: 'usr_e2e_bettor_1',
+      userId: bettor.userId,
       realBalance: 0,
       bonusBalance: 0,
       totalBalance: 0,
@@ -79,38 +143,31 @@ describe('WalletController (e2e)', () => {
     });
   });
 
-  it('POST /api/v1/wallet/deposits/intent creates a pending intent', async () => {
-    const response = await request(app.getHttpServer())
-      .post('/api/v1/wallet/deposits/intent')
-      .set('x-user-id', 'usr_e2e_bettor_1')
-      .set('idempotency-key', 'IDEMP_E2E_INTENT_1')
-      .send({ amount: 50.0, currency: 'USD' })
-      .expect(201);
+  it('enforces IDOR protection and credits balance after verified server-to-server confirmation', async () => {
+    const owner = await createVerifiedUserAndCookie('wallet.two@utpl.edu.ec');
+    const attacker = await createVerifiedUserAndCookie('wallet.attacker@utpl.edu.ec');
 
-    const body = response.body as unknown as IntentPayload;
-    expect(body).toMatchObject({
-      status: 'PENDING',
-      amount: 50.0,
-      currency: 'USD',
-    });
-    expect(body.clientTransactionId).toBeDefined();
-    expect(body.payphoneUrl).toBeDefined();
-  });
-
-  it('POST /api/v1/wallet/deposits/confirm credits balance after verified server-to-server confirmation', async () => {
-    const userId = 'usr_e2e_bettor_2';
-
-    // 1. Create intent
     const intentRes = await request(app.getHttpServer())
       .post('/api/v1/wallet/deposits/intent')
-      .set('x-user-id', userId)
-      .send({ amount: 25.0 })
+      .set('Cookie', [owner.cookie])
+      .set('idempotency-key', 'IDEMP_E2E_INTENT_1')
+      .send({ amount: 25.0, currency: 'USD' })
       .expect(201);
 
     const intentBody = intentRes.body as unknown as IntentPayload;
     const clientTxId = intentBody.clientTransactionId;
+    expect(intentBody.status).toBe('PENDING');
 
-    // Mock Payphone sandbox verification
+    // Different authenticated user cannot confirm owner's payment intent (403 IDOR defense)
+    await request(app.getHttpServer())
+      .post('/api/v1/wallet/deposits/confirm')
+      .set('Cookie', [attacker.cookie])
+      .send({
+        clientTransactionId: clientTxId,
+        payphoneTransactionId: 'PAYPHONE_HIJACK',
+      })
+      .expect(403);
+
     jest.spyOn(payphoneService, 'verifyWithPayphone').mockResolvedValueOnce({
       status: 'Approved',
       amountInCents: 2500,
@@ -119,9 +176,9 @@ describe('WalletController (e2e)', () => {
       payphoneTransactionId: 'PAYPHONE_E2E_123',
     });
 
-    // 2. Confirm deposit
     const confirmRes = await request(app.getHttpServer())
       .post('/api/v1/wallet/deposits/confirm')
+      .set('Cookie', [owner.cookie])
       .send({
         clientTransactionId: clientTxId,
         payphoneTransactionId: 'PAYPHONE_E2E_123',
@@ -136,19 +193,16 @@ describe('WalletController (e2e)', () => {
       newRealBalance: 25.0,
     });
 
-    // 3. Verify balance endpoint reflects new balance
     const balanceRes = await request(app.getHttpServer())
       .get('/api/v1/wallet/balance')
-      .set('x-user-id', userId)
+      .set('Cookie', [owner.cookie])
       .expect(200);
 
-    const balanceBody = balanceRes.body as unknown as BalancePayload;
-    expect(balanceBody.realBalance).toBe(25.0);
+    expect((balanceRes.body as unknown as BalancePayload).realBalance).toBe(25.0);
 
-    // 4. Verify movements endpoint lists deposit
     const movementsRes = await request(app.getHttpServer())
       .get('/api/v1/wallet/movements')
-      .set('x-user-id', userId)
+      .set('Cookie', [owner.cookie])
       .expect(200);
 
     const movementsBody = movementsRes.body as unknown as MovementsPayload;
@@ -158,12 +212,11 @@ describe('WalletController (e2e)', () => {
   });
 
   it('POST /api/v1/wallet/debit successfully debits available balance and rejects overdraw', async () => {
-    const userId = 'usr_e2e_bettor_3';
+    const bettor = await createVerifiedUserAndCookie('wallet.three@utpl.edu.ec');
 
-    // Seed $20.00
     const intentRes = await request(app.getHttpServer())
       .post('/api/v1/wallet/deposits/intent')
-      .set('x-user-id', userId)
+      .set('Cookie', [bettor.cookie])
       .send({ amount: 20.0 })
       .expect(201);
 
@@ -178,16 +231,16 @@ describe('WalletController (e2e)', () => {
 
     await request(app.getHttpServer())
       .post('/api/v1/wallet/deposits/confirm')
+      .set('Cookie', [bettor.cookie])
       .send({
         clientTransactionId: intentBody.clientTransactionId,
         payphoneTransactionId: 'PAYPHONE_E2E_SEED',
       })
       .expect(200);
 
-    // Debit $12.00
     const debitRes = await request(app.getHttpServer())
       .post('/api/v1/wallet/debit')
-      .set('x-user-id', userId)
+      .set('Cookie', [bettor.cookie])
       .send({
         amount: 12.0,
         referenceCode: 'BET_STAKE_E2E_1',
@@ -195,17 +248,15 @@ describe('WalletController (e2e)', () => {
       })
       .expect(200);
 
-    const debitBody = debitRes.body as unknown as DebitPayload;
-    expect(debitBody).toMatchObject({
+    expect(debitRes.body as unknown as DebitPayload).toMatchObject({
       success: true,
       debitedAmount: 12.0,
       remainingBalance: 8.0,
     });
 
-    // Overdraw attempt: Debit $10.00 when only $8.00 remain -> 422 Unprocessable Entity
     await request(app.getHttpServer())
       .post('/api/v1/wallet/debit')
-      .set('x-user-id', userId)
+      .set('Cookie', [bettor.cookie])
       .send({
         amount: 10.0,
         referenceCode: 'BET_STAKE_E2E_FAIL',
@@ -213,13 +264,11 @@ describe('WalletController (e2e)', () => {
       })
       .expect(422);
 
-    // Verify balance remains 8.0
     const balanceRes = await request(app.getHttpServer())
       .get('/api/v1/wallet/balance')
-      .set('x-user-id', userId)
+      .set('Cookie', [bettor.cookie])
       .expect(200);
 
-    const balanceBody = balanceRes.body as unknown as BalancePayload;
-    expect(balanceBody.realBalance).toBe(8.0);
+    expect((balanceRes.body as unknown as BalancePayload).realBalance).toBe(8.0);
   });
 });
