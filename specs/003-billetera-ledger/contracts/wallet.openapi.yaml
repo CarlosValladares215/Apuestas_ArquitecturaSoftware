@@ -1,0 +1,367 @@
+openapi: 3.0.3
+info:
+  title: Billetera, Ledger y Depósitos Payphone API
+  description: API financiera de la plataforma de apuestas deportivas para gestión de saldo derivado de ledger inmutable, depósitos Payphone sandbox y control de concurrencia.
+  version: 0.1.0
+servers:
+  - url: http://localhost:3001/api/v1
+    description: Servidor de desarrollo local
+
+paths:
+  /wallet/balance:
+    get:
+      summary: Consultar saldo derivado de la billetera
+      description: Retorna el saldo disponible real y de bonificación derivado exclusivamente de la suma de asientos contables del ledger.
+      operationId: getWalletBalance
+      parameters:
+        - name: x-user-id
+          in: header
+          required: true
+          description: Identificador del usuario autenticado
+          schema:
+            type: string
+            example: usr_bettor_123
+      responses:
+        '200':
+          description: Saldo consolidado del usuario
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletBalanceResponse'
+        '401':
+          description: No autenticado
+
+  /wallet/movements:
+    get:
+      summary: Consultar movimientos e historial contable
+      description: Retorna el listado cronológico de asientos y transacciones que componen el saldo del usuario.
+      operationId: getWalletMovements
+      parameters:
+        - name: x-user-id
+          in: header
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Historial de movimientos contables
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletMovementsResponse'
+
+  /wallet/deposits/intent:
+    post:
+      summary: Iniciar intención de depósito con Payphone Sandbox
+      description: Registra una intención de pago en estado PENDING y retorna el identificador y URL de sandbox para completar el pago.
+      operationId: createDepositIntent
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDepositIntentRequest'
+      responses:
+        '201':
+          description: Intención creada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepositIntentResponse'
+        '400':
+          description: Parámetros inválidos (ej. monto no positivo o moneda no soportada)
+
+  /wallet/deposits/confirm:
+    post:
+      summary: Confirmar depósito servidor a servidor con Payphone
+      description: Recibe los datos de la transacción de Payphone, valida servidor a servidor contra la API de Payphone, y acredita el ledger de forma atómica e idempotente.
+      operationId: confirmDeposit
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmDepositRequest'
+      responses:
+        '200':
+          description: Depósito confirmado y acreditado en el ledger (o ya confirmado previamente de forma idempotente)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfirmDepositResponse'
+        '400':
+          description: Rechazo por manipulación de datos (monto o moneda alterados) o estado no aprobado
+        '404':
+          description: Intención de pago no encontrada
+
+  /wallet/debit:
+    post:
+      summary: Ejecutar débito transaccional con bloqueo de fila
+      description: Endpoint interno / de dominio para descontar saldo de la billetera con bloqueo pesimista contra doble gasto.
+      operationId: debitWallet
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DebitWalletRequest'
+      responses:
+        '200':
+          description: Débito ejecutado exitosamente en el ledger
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DebitWalletResponse'
+        '422':
+          description: Saldo insuficiente para completar el débito
+
+components:
+  schemas:
+    WalletBalanceResponse:
+      type: object
+      required:
+        - userId
+        - realBalance
+        - bonusBalance
+        - totalBalance
+        - currency
+        - updatedAt
+      properties:
+        userId:
+          type: string
+          example: usr_bettor_123
+        realBalance:
+          type: number
+          description: Saldo real en dólares (formato decimal)
+          example: 45.50
+        bonusBalance:
+          type: number
+          description: Saldo de bono en dólares
+          example: 10.00
+        totalBalance:
+          type: number
+          example: 55.50
+        currency:
+          type: string
+          example: USD
+        updatedAt:
+          type: string
+          format: date-time
+
+    WalletMovementsResponse:
+      type: object
+      required:
+        - movements
+        - total
+      properties:
+        total:
+          type: integer
+          example: 1
+        movements:
+          type: array
+          items:
+            $ref: '#/components/schemas/WalletMovementItem'
+
+    WalletMovementItem:
+      type: object
+      required:
+        - id
+        - transactionId
+        - referenceCode
+        - type
+        - accountType
+        - entryType
+        - amount
+        - description
+        - createdAt
+      properties:
+        id:
+          type: string
+        transactionId:
+          type: string
+        referenceCode:
+          type: string
+          example: DEP-1731700000-XYZ
+        type:
+          type: string
+          enum: [DEPOSIT, WITHDRAWAL, BET_STAKE, BET_PAYOUT, BONUS_GRANT, COMPENSATION]
+        accountType:
+          type: string
+          enum: [user_real, user_bonus]
+        entryType:
+          type: string
+          enum: [DEBIT, CREDIT]
+        amount:
+          type: number
+          description: Monto del movimiento en dólares
+          example: 25.00
+        description:
+          type: string
+          example: Deposito con Payphone
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateDepositIntentRequest:
+      type: object
+      required:
+        - userId
+        - amount
+        - currency
+      properties:
+        userId:
+          type: string
+          example: usr_bettor_123
+        amount:
+          type: number
+          description: Monto a recargar en dólares (mínimo 1.00)
+          example: 25.00
+        currency:
+          type: string
+          enum: [USD]
+          default: USD
+
+    DepositIntentResponse:
+      type: object
+      required:
+        - intentId
+        - clientTransactionId
+        - amount
+        - currency
+        - status
+        - payphoneUrl
+      properties:
+        intentId:
+          type: string
+        clientTransactionId:
+          type: string
+        amount:
+          type: number
+          example: 25.00
+        currency:
+          type: string
+          example: USD
+        status:
+          type: string
+          example: PENDING
+        payphoneUrl:
+          type: string
+          example: https://pay.payphonetodoesposible.com/pay?token=mock_sandbox_token
+
+    ConfirmDepositRequest:
+      type: object
+      required:
+        - clientTransactionId
+        - payphoneTransactionId
+      properties:
+        clientTransactionId:
+          type: string
+          example: DEP-1731700000-XYZ
+        payphoneTransactionId:
+          type: string
+          example: payphone_tx_987654
+
+    ConfirmDepositResponse:
+      type: object
+      required:
+        - success
+        - status
+        - clientTransactionId
+        - creditedAmount
+        - currency
+        - newRealBalance
+      properties:
+        success:
+          type: boolean
+          example: true
+        status:
+          type: string
+          example: COMPLETED
+        clientTransactionId:
+          type: string
+        creditedAmount:
+          type: number
+          example: 25.00
+        currency:
+          type: string
+          example: USD
+        newRealBalance:
+          type: number
+          example: 45.50
+
+    DebitWalletRequest:
+      type: object
+      required:
+        - userId
+        - amount
+        - referenceCode
+        - description
+        - accountType
+      properties:
+        userId:
+          type: string
+          example: usr_bettor_123
+        amount:
+          type: number
+          example: 10.00
+        referenceCode:
+          type: string
+          example: BET-STAKE-001
+        description:
+          type: string
+          example: Apuesta simple partido ID 502
+        accountType:
+          type: string
+          enum: [user_real, user_bonus]
+          default: user_real
+
+    DebitWalletResponse:
+      type: object
+      required:
+        - success
+        - transactionId
+        - debitedAmount
+        - remainingBalance
+      properties:
+        success:
+          type: boolean
+          example: true
+        transactionId:
+          type: string
+        debitedAmount:
+          type: number
+          example: 10.00
+        remainingBalance:
+          type: number
+          example: 35.50
