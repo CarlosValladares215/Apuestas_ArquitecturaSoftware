@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { APP_ROLES, APP_VERSION } from '@apuestas/shared';
 
 interface ServiceItem {
@@ -30,7 +31,12 @@ export default function HomePage() {
       <header className="topbar">
         <div className="topbar-inner">
           <span className="brand">Apuestas Deportivas UTPL</span>
-          <span className="version-tag">Base v{APP_VERSION} · Sandbox académico</span>
+          <div className="topbar-nav">
+            <Link href="/wallet" className="nav-link font-semibold">
+              Billetera y Depósitos ↗
+            </Link>
+            <span className="version-tag">Base v{APP_VERSION} · Sandbox académico</span>
+          </div>
         </div>
       </header>
 
