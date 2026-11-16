@@ -68,9 +68,7 @@ export function Matchboard({ initialMatches, syncStatus }: Readonly<MatchboardPr
       if (isMounted && !isMounted()) {
         return;
       }
-      if (remoteMatches.length > 0) {
-        setMatches(remoteMatches);
-      }
+      setMatches(remoteMatches);
       setLiveSyncStatus(remoteSync);
       setDataSource('live');
     } catch {
