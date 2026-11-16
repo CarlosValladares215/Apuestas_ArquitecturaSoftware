@@ -75,5 +75,6 @@ Todas las skills están disponibles tanto en `.agents/skills/` (Antigravity, Gem
 <!-- SPECKIT START -->
 
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
+shell commands, and other important information, read the current plan at
+`specs/005-partidos-mercados/plan.md`.
 <!-- SPECKIT END -->
