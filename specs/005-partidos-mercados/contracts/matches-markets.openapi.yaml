@@ -1,0 +1,427 @@
+openapi: 3.1.0
+info:
+  title: Apuestas Deportivas API — Partidos, Mercados y Worker API-Football (Specs 005 & 006)
+  version: 0.1.0
+  description: >-
+    Contrato de endpoints para consulta de cartelera y mercados, CRUD de operador
+    para partidos/mercados/cuotas manuales, máquina de estados y sincronización
+    controlada con API-Football.
+paths:
+  /matches:
+    get:
+      summary: Listar cartelera de partidos con mercados evaluados según el reloj del servidor
+      operationId: listMatches
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/MatchStatus'
+        - name: competitionId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Lista de partidos y sus mercados
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Match'
+    post:
+      summary: Crear un partido manualmente (solo operator o admin)
+      operationId: createMatch
+      parameters:
+        - $ref: '#/components/parameters/UserRoleHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMatchRequest'
+      responses:
+        '201':
+          description: Partido creado y registrado en auditoría
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Match'
+        '400':
+          description: Datos de entrada inválidos
+        '403':
+          description: Rol insuficiente (requiere operator o admin)
+  /matches/{id}:
+    get:
+      summary: Obtener detalle de un partido con todos sus mercados y selecciones
+      operationId: getMatchById
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Detalle del partido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Match'
+        '404':
+          description: Partido no encontrado
+  /matches/{id}/status:
+    patch:
+      summary: Transicionar el estado de un partido según la máquina de estados (solo operator o admin)
+      operationId: updateMatchStatus
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/UserRoleHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMatchStatusRequest'
+      responses:
+        '200':
+          description: Estado actualizado y mercados pre-partido cerrados si corresponde
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Match'
+        '400':
+          description: Transición de estado inválida
+        '403':
+          description: Rol insuficiente
+        '404':
+          description: Partido no encontrado
+  /matches/{id}/markets:
+    post:
+      summary: Crear un mercado manual en un partido (solo operator o admin)
+      operationId: createMarket
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/UserRoleHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMarketRequest'
+      responses:
+        '201':
+          description: Mercado creado y auditado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BettingMarket'
+        '400':
+          description: Mercado inválido o partido ya iniciado para mercado pre-partido
+        '403':
+          description: Rol insuficiente
+  /matches/{id}/markets/{marketId}/odds:
+    patch:
+      summary: Actualizar cuotas manuales de un mercado abierto (solo operator o admin)
+      operationId: updateMarketOdds
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: marketId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/UserRoleHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMarketOddsRequest'
+      responses:
+        '200':
+          description: Cuotas actualizadas y auditadas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BettingMarket'
+        '400':
+          description: Cuota menor a 1.01 o mercado cerrado por inicio del partido
+        '403':
+          description: Rol insuficiente
+  /matches/sync/status:
+    get:
+      summary: Consultar estado del presupuesto diario y frecuencia adaptativa del worker API-Football
+      operationId: getSyncStatus
+      responses:
+        '200':
+          description: Estado actual del presupuesto y planificación de API-Football
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiFootballSyncStatus'
+  /matches/sync/run:
+    post:
+      summary: Ejecutar un ciclo de sincronización con API-Football respetando el presupuesto diario (solo operator o admin)
+      operationId: runSyncCycle
+      parameters:
+        - $ref: '#/components/parameters/UserRoleHeader'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                purpose:
+                  type: string
+                  enum: [live, scheduled]
+      responses:
+        '200':
+          description: Resultado del ciclo de sincronización
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiFootballSyncStatus'
+        '403':
+          description: Rol insuficiente
+components:
+  parameters:
+    UserRoleHeader:
+      name: x-user-role
+      in: header
+      required: true
+      schema:
+        type: string
+        enum: [bettor, operator, admin]
+  schemas:
+    MatchStatus:
+      type: string
+      enum: [programado, en_vivo, finalizado, suspendido, aplazado, cancelado]
+    MarketStatus:
+      type: string
+      enum: [open, closed, suspended]
+    Competition:
+      type: object
+      required: [id, name, country, sport]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        country:
+          type: string
+        sport:
+          type: string
+    MarketSelection:
+      type: object
+      required: [id, marketId, key, label, odds]
+      properties:
+        id:
+          type: string
+        marketId:
+          type: string
+        key:
+          type: string
+        label:
+          type: string
+        odds:
+          type: number
+          minimum: 1.01
+    BettingMarket:
+      type: object
+      required: [id, matchId, type, name, isPreMatch, status, closedReason, selections]
+      properties:
+        id:
+          type: string
+        matchId:
+          type: string
+        type:
+          type: string
+        name:
+          type: string
+        isPreMatch:
+          type: boolean
+        status:
+          $ref: '#/components/schemas/MarketStatus'
+        closedReason:
+          type: [string, 'null']
+        selections:
+          type: array
+          items:
+            $ref: '#/components/schemas/MarketSelection'
+    Match:
+      type: object
+      required:
+        [
+          id,
+          competitionId,
+          competition,
+          homeTeam,
+          awayTeam,
+          kickoffAt,
+          status,
+          score,
+          markets,
+          updatedAt,
+        ]
+      properties:
+        id:
+          type: string
+        competitionId:
+          type: string
+        competition:
+          $ref: '#/components/schemas/Competition'
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        kickoffAt:
+          type: string
+          format: date-time
+        status:
+          $ref: '#/components/schemas/MatchStatus'
+        score:
+          type: object
+          required: [home, away]
+          properties:
+            home:
+              type: integer
+              minimum: 0
+            away:
+              type: integer
+              minimum: 0
+        elapsedMinute:
+          type: [integer, 'null']
+        markets:
+          type: array
+          items:
+            $ref: '#/components/schemas/BettingMarket'
+        updatedAt:
+          type: string
+          format: date-time
+    CreateMatchRequest:
+      type: object
+      required: [competitionId, competitionName, country, homeTeam, awayTeam, kickoffAt]
+      properties:
+        competitionId:
+          type: string
+        competitionName:
+          type: string
+        country:
+          type: string
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        kickoffAt:
+          type: string
+          format: date-time
+    UpdateMatchStatusRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          $ref: '#/components/schemas/MatchStatus'
+        homeScore:
+          type: integer
+          minimum: 0
+        awayScore:
+          type: integer
+          minimum: 0
+        elapsedMinute:
+          type: integer
+          minimum: 0
+    CreateMarketRequest:
+      type: object
+      required: [type, name, isPreMatch, selections]
+      properties:
+        type:
+          type: string
+        name:
+          type: string
+        isPreMatch:
+          type: boolean
+        selections:
+          type: array
+          minItems: 2
+          items:
+            type: object
+            required: [key, label, odds]
+            properties:
+              key:
+                type: string
+              label:
+                type: string
+              odds:
+                type: number
+                minimum: 1.01
+    UpdateMarketOddsRequest:
+      type: object
+      required: [selections]
+      properties:
+        selections:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [key, odds]
+            properties:
+              key:
+                type: string
+              odds:
+                type: number
+                minimum: 1.01
+    ApiFootballSyncStatus:
+      type: object
+      required:
+        - dateUtc
+        - dailyBudget
+        - liveReserve
+        - usedToday
+        - remainingToday
+        - activeLiveMatches
+        - mode
+        - recommendedIntervalMs
+        - apiKeyConfigured
+        - lastSyncAt
+        - lastSyncOutcome
+      properties:
+        dateUtc:
+          type: string
+        dailyBudget:
+          type: number
+        liveReserve:
+          type: number
+        usedToday:
+          type: number
+        remainingToday:
+          type: number
+        activeLiveMatches:
+          type: number
+        mode:
+          type: string
+          enum: [live_active, scheduled_only, reserve_protected, budget_exhausted]
+        recommendedIntervalMs:
+          type: [number, 'null']
+        apiKeyConfigured:
+          type: boolean
+        lastSyncAt:
+          type: [string, 'null']
+        lastSyncOutcome:
+          type: string
+          enum: [updated, skipped_budget, skipped_reserve, idle]
