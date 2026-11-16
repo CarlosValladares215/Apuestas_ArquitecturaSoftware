@@ -8,7 +8,7 @@ import {
   calculateAdaptiveSyncIntervalMs,
   canConsumeApiFootballQuota,
 } from '@apuestas/shared';
-import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { CLOCK_PORT, ServerClock } from './clock.provider';
 import { MatchesService } from './matches.service';
@@ -78,7 +78,7 @@ function mapApiFootballStatus(shortCode: string | undefined): MatchStatus {
 }
 
 @Injectable()
-export class ApiFootballSyncService {
+export class ApiFootballSyncService implements OnModuleInit {
   private readonly logger = new Logger(ApiFootballSyncService.name);
   private readonly dailyBudget: number;
   private readonly liveReserve: number;
@@ -119,6 +119,27 @@ export class ApiFootballSyncService {
       (explicitLiveFetch !== 'false' && hasRealKey && process.env.NODE_ENV !== 'test');
 
     this.matchesRepository = matchesRepository ?? new InMemoryMatchesRepository();
+  }
+
+  async onModuleInit(): Promise<void> {
+    if (process.env.NODE_ENV === 'test' || !this.liveFetchEnabled || !this.apiKey) {
+      return;
+    }
+
+    try {
+      const existing = await this.matchesService.listMatches();
+      if (existing.length > 0) {
+        return;
+      }
+
+      await this.runSyncCycle('live', 'operator', null);
+      const afterLive = await this.matchesService.listMatches();
+      if (afterLive.length === 0) {
+        await this.runSyncCycle('scheduled', 'operator', null);
+      }
+    } catch (error) {
+      this.logger.warn(`Initial API-Football startup sync failed: ${(error as Error).message}`);
+    }
   }
 
   async getStatus(): Promise<ApiFootballSyncStatus> {

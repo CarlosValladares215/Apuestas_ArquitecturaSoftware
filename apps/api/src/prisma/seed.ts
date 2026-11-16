@@ -67,6 +67,24 @@ export async function runDatabaseSeed(): Promise<void> {
     }
 
     const initialMatches = createInitialMatchesSeed();
+    const apiFootballKey = (process.env.API_FOOTBALL_KEY ?? '').trim();
+    const hasRealApiFootballKey = Boolean(
+      apiFootballKey &&
+      apiFootballKey !== 'replace_with_api_football_sandbox_key' &&
+      !apiFootballKey.startsWith('sandbox_'),
+    );
+
+    if (hasRealApiFootballKey) {
+      const seedIds = initialMatches.map((match) => match.id);
+      const removed = await prisma.match.deleteMany({
+        where: { id: { in: seedIds } },
+      });
+      seedLogger.log(
+        `API_FOOTBALL_KEY configured: skipped demo seed fixtures (cleaned ${String(removed.count)} legacy seed matches).`,
+      );
+      return;
+    }
+
     for (const match of initialMatches) {
       await prisma.competition.upsert({
         where: { id: match.competition.id },
