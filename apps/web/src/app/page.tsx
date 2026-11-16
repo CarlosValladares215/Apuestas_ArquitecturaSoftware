@@ -1,4 +1,6 @@
-import { APP_ROLES, APP_VERSION } from '@apuestas/shared';
+import Link from 'next/link';
+import { APP_ROLES } from '@apuestas/shared';
+import { SiteHeader } from '../components/SiteHeader';
 
 interface ServiceItem {
   name: string;
@@ -27,12 +29,7 @@ const PLATFORM_SERVICES: readonly ServiceItem[] = [
 export default function HomePage() {
   return (
     <div className="page-shell">
-      <header className="topbar">
-        <div className="topbar-inner">
-          <span className="brand">Apuestas Deportivas UTPL</span>
-          <span className="version-tag">Base v{APP_VERSION} · Sandbox académico</span>
-        </div>
-      </header>
+      <SiteHeader currentPath="/" />
 
       <main className="main-container">
         <section aria-labelledby="hero-title">
@@ -44,6 +41,18 @@ export default function HomePage() {
             presentación: todos los saldos, cuotas, validaciones y liquidaciones viven
             exclusivamente en el servidor.
           </p>
+
+          <div className="cta-strip">
+            <Link href="/registro" className="btn-primary">
+              Crear cuenta
+            </Link>
+            <Link href="/login" className="btn-secondary">
+              Iniciar sesión
+            </Link>
+            <Link href="/seguridad" className="btn-secondary">
+              Seguridad 2FA
+            </Link>
+          </div>
 
           <ul className="principles-list">
             <li className="principle-item">

@@ -8,7 +8,7 @@ Fuente: fases de [`PLAN.md`](../PLAN.md). Reglas: [constitución](../.specify/me
 | #   | Spec                              | Fase | Alcance                                                                           | Estado    |
 | --- | --------------------------------- | ---- | --------------------------------------------------------------------------------- | --------- |
 | 001 | `001-fundaciones-monorepo`        | F0   | Monorepo con las tres apps, CI/CD, SonarQube, despliegues Vercel/Render y Grafana | Terminada |
-| 002 | `002-autenticacion-roles`         | F1   | Registro, login, 2FA, roles (RBAC), bloqueo por intentos fallidos y auditoría     | Pendiente |
+| 002 | `002-autenticacion-roles`         | F1   | Registro, login, 2FA, roles (RBAC), bloqueo por intentos fallidos y auditoría     | Terminada |
 | 003 | `003-billetera-ledger`            | F2   | Ledger de doble entrada, saldo real y de bono, bloqueo de concurrencia            | Pendiente |
 | 004 | `004-depositos-payphone`          | F2   | Depósitos con Payphone sandbox y confirmación servidor a servidor                 | Pendiente |
 | 005 | `005-partidos-mercados`           | F3   | Partidos, máquina de estados, mercados y cuotas, gestión del operador             | Pendiente |
