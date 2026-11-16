@@ -15,7 +15,9 @@ services:
       - key: AUTH_STORAGE_DRIVER
         value: prisma
       - key: CAPTCHA_PROVIDER
-        value: turnstile
+        value: mock
+      - key: EMAIL_SANDBOX_ECHO
+        value: 'true'
       - key: JWT_ACCESS_SECRET
         generateValue: true
       - key: JWT_REFRESH_SECRET
@@ -26,21 +28,23 @@ services:
         sync: false
       - key: FRONTEND_URL
         sync: false
-      - key: RESEND_API_KEY
-        sync: false
       - key: EMAIL_FROM
-        sync: false
-      - key: CAPTCHA_SECRET_KEY
-        sync: false
+        value: 'Apuestas UTPL <no-reply@apuestas-utpl.edu.ec>'
+      - key: RESEND_API_KEY
+        value: ''
       - key: PAYPHONE_TOKEN
-        sync: false
+        value: ''
       - key: PAYPHONE_STORE_ID
-        sync: false
+        value: ''
       - key: API_FOOTBALL_KEY
-        sync: false
+        value: ''
       - key: SEED_ADMIN_EMAIL
         sync: false
       - key: SEED_ADMIN_PASSWORD
+        sync: false
+      - key: SEED_OPERATOR_EMAIL
+        sync: false
+      - key: SEED_OPERATOR_PASSWORD
         sync: false
       - key: DATABASE_URL
         fromDatabase:
@@ -62,7 +66,7 @@ services:
     healthCheckPath: /health
     envVars:
       - key: REPORTS_DATABASE_URL
-        sync: false
+        value: ''
 
   - type: redis
     name: apuestas-redis
