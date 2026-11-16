@@ -3,11 +3,13 @@
 import Link from 'next/link';
 import { SyntheticEvent, useState } from 'react';
 import type { AuthUserView } from '@apuestas/shared';
+import { AppShell } from '../../components/AppShell';
 import { CaptchaChallenge } from '../../components/CaptchaChallenge';
-import { SiteHeader } from '../../components/SiteHeader';
+import { ROLE_METADATA, useSession } from '../../context/session-context';
 import { ApiClientError, loginAccount } from '../../lib/api-client';
 
 export default function LoginPage() {
+  const { setSessionUser } = useSession();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [totpCode, setTotpCode] = useState('');
@@ -35,6 +37,7 @@ export default function LoginPage() {
         ...(totpCode.trim() ? { totpCode: totpCode.trim() } : {}),
       });
       setActiveUser(response.user);
+      setSessionUser(response.user);
       setPassword('');
     } catch (error) {
       if (error instanceof ApiClientError) {
@@ -48,9 +51,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="page-shell">
-      <SiteHeader currentPath="/login" />
-
+    <AppShell currentPath="/login">
       <main className="auth-layout">
         <section className="panel-card" aria-labelledby="login-heading">
           <h1 id="login-heading" className="hero-title">
@@ -140,12 +141,24 @@ export default function LoginPage() {
             {activeUser ? (
               <div role="status" className="alert-success">
                 <p>
-                  Sesión activa para <strong>{activeUser.email}</strong> (rol: {activeUser.role}).
+                  Sesión activa para <strong>{activeUser.email}</strong> (rol:{' '}
+                  <strong>{ROLE_METADATA[activeUser.role].title}</strong> · {activeUser.role}).
                 </p>
                 <div className="btn-row">
+                  <Link href="/" className="btn-secondary">
+                    Ir a Cartelera
+                  </Link>
+                  <Link href="/wallet" className="btn-secondary">
+                    Mi Billetera
+                  </Link>
                   <Link href="/seguridad" className="btn-secondary">
                     Ir a Seguridad 2FA
                   </Link>
+                  {activeUser.role === 'operator' || activeUser.role === 'admin' ? (
+                    <Link href="/operador" className="btn-secondary">
+                      Panel de Operador
+                    </Link>
+                  ) : null}
                   {activeUser.role === 'admin' ? (
                     <Link href="/admin/usuarios" className="btn-secondary">
                       Panel de Administración
@@ -188,6 +201,6 @@ export default function LoginPage() {
           </ul>
         </aside>
       </main>
-    </div>
+    </AppShell>
   );
 }

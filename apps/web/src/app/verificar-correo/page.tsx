@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { SyntheticEvent, useEffect, useState } from 'react';
-import { SiteHeader } from '../../components/SiteHeader';
+import { AppShell } from '../../components/AppShell';
 import { ApiClientError, verifyEmailToken } from '../../lib/api-client';
 
 export default function VerifyEmailPage() {
@@ -44,9 +44,7 @@ export default function VerifyEmailPage() {
   }
 
   return (
-    <div className="page-shell">
-      <SiteHeader currentPath="/verificar-correo" />
-
+    <AppShell currentPath="/verificar-correo">
       <main className="auth-layout">
         <section className="panel-card" aria-labelledby="verify-heading">
           <h1 id="verify-heading" className="hero-title">
@@ -112,6 +110,6 @@ export default function VerifyEmailPage() {
           </p>
         </aside>
       </main>
-    </div>
+    </AppShell>
   );
 }
