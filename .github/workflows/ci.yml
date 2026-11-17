@@ -71,7 +71,7 @@ jobs:
   sonarqube:
     name: SonarQube Cloud Quality Gate
     needs: [quality-js, quality-python]
-    if: ${{ secrets.SONAR_TOKEN != '' }}
+    if: ${{ vars.SONAR_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
